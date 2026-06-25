@@ -15,6 +15,7 @@ You defeat Bob.
     You take his {his_money} gold.
     ~ increase("player.money", his_money)
     ~ set("bob.money", 0)
+    ~ move("bob", "")
 }
 -> END
 

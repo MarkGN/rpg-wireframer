@@ -2,5 +2,5 @@ name: Zorro
 description: Hello, handsome!
 portrait: null
 inventory: []
-money: 100
+money: 0
 location: red-town

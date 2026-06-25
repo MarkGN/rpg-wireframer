@@ -83,6 +83,7 @@ world_state: dict[str, Any] = defaultdict(dict)
 
 # Metadata that the engine itself uses (not mutable from Ink).
 rooms:  dict[str, dict] = {}   # room_id → room data
+all_items:   dict[str, dict] = {}   # item_id  → item data
 npcs:   dict[str, dict] = {}   # npc_id  → npc metadata
 visited: set[str] = set()      # room_ids the player has entered
 
@@ -105,6 +106,12 @@ def load_world() -> str:
         data = load_yaml(path)
         rooms[room_id] = data
         world_state["global"].setdefault(f"visited_{room_id}", False)
+
+    # Items
+    for path in sorted(ITEMS_DIR.glob("*.yaml")):
+        item_id = path.stem
+        data = load_yaml(path)
+        all_items[item_id] = data
 
     # NPCs
     for path in sorted(NPCS_DIR.glob("*.yaml")):
@@ -307,30 +314,27 @@ def run_ink_story(npc_id: str, room_id: str) -> None:
     def ext_move_npc(npc, location):
         move_npc(npc, location)
 
-    def ext_shop(sales_inventory):
+    def ext_shop(sales_inventory_handle):
         while True:
+            sales_inventory = ext_get(sales_inventory_handle)
             if not sales_inventory:
                 print("Sorry, I'm out of stock.")
                 return
             print("\n  What would you like to buy?")
             print(f"You have ${ext_get('player.money')}.")
-            items = []
-            for i in ext_get(sales_inventory):
-                with open("world/items/"+i+".yaml", "r") as file:
-                    items.append(yaml.safe_load(file))
-                    items[-1]["handle"] = i
-            for i, item in enumerate(items, 1):
-                print(f'  {i}. {item["name"]} — ${item["price"]}')
+            for i, item_handle in enumerate(sales_inventory, 1):
+                print(f'  {i}. {all_items[item_handle]["name"]} — ${all_items[item_handle]["price"]}')
             print("  0. Leave")
             choice = input("  > ").strip()
             if choice == "0":
                 break
-            if choice.isdigit() and 1 <= int(choice) <= len(items):
-                item = items[int(choice) - 1]
+            if choice.isdigit() and 1 <= int(choice) <= len(sales_inventory):
+                item_handle = sales_inventory[int(choice) - 1]
+                item = all_items[item_handle]
                 price = item["price"]
                 if world_state["player"]["money"] >= price:
                     world_state["player"]["money"] -= price
-                    ext_add_item("player.inventory", item)
+                    ext_add_item("player.inventory", item_handle)
                     print(f"  You buy the {item["name"]} for ${price}.")
                 else:
                     print("  You can't afford that.")
@@ -482,7 +486,6 @@ def check_block(room_id, category, target):
     """Return the first accosting NPC, if any"""
     for npc_id in npcs_in_room(room_id):
         guards = npcs[npc_id].get("guards-"+category, {})
-        print(npc_id, npcs[npc_id], guards, target)
         if target in guards:
             return npc_id
     return None
@@ -533,7 +536,7 @@ def main() -> None:
             inv = world_state["player"].get("inventory", [])
             money = world_state["player"].get("money", 0)
             print(f"\n  Money: {money}")
-            print(f"  Inventory: {', '.join([item["name"] for item in inv]) if inv else '(empty)'}\n")
+            print(f"  Inventory: {', '.join([all_items[item]["name"] for item in inv]) if inv else '(empty)'}\n")
 
         # --- go ---
         elif verb == "go":
@@ -541,7 +544,6 @@ def main() -> None:
             exits = rooms[current_room].get("exits", {})
             if direction in exits:
                 blocking = check_block(current_room, "exits", direction)
-                print("blocking", blocking)
                 if blocking:
                     run_ink_story(blocking, current_room)
                     continue
