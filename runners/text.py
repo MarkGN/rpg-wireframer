@@ -330,7 +330,7 @@ def run_ink_story(npc_id: str, room_id: str) -> None:
                 price = item["price"]
                 if world_state["player"]["money"] >= price:
                     world_state["player"]["money"] -= price
-                    ext_add_item("player.inventory", item["handle"])
+                    ext_add_item("player.inventory", item)
                     print(f"  You buy the {item["name"]} for ${price}.")
                 else:
                     print("  You can't afford that.")
@@ -533,7 +533,7 @@ def main() -> None:
             inv = world_state["player"].get("inventory", [])
             money = world_state["player"].get("money", 0)
             print(f"\n  Money: {money}")
-            print(f"  Inventory: {', '.join(inv) if inv else '(empty)'}\n")
+            print(f"  Inventory: {', '.join([item["name"] for item in inv]) if inv else '(empty)'}\n")
 
         # --- go ---
         elif verb == "go":
