@@ -69,7 +69,7 @@ DIALOGUE_DIR = Path("dialogue")
 
 # Fields that are engine keywords and should NOT be dumped into world_state.
 NPC_KEYWORDS = {"name", "description", "portrait", "location", "locations",
-                "dialogue", "accosts"}
+                "dialogue", "accosts", "guards-exits", "guards-items"}
 
 
 # ---------------------------------------------------------------------------
@@ -477,6 +477,16 @@ def check_accost(room_id: str) -> str | None:
     return None
 
 
+def check_block(room_id, category, target):
+    """Return the first accosting NPC, if any"""
+    for npc_id in npcs_in_room(room_id):
+        guards = npcs[npc_id].get("guards-"+category, {})
+        print(npc_id, npcs[npc_id], guards, target)
+        if target in guards:
+            return npc_id
+    return None
+
+
 def main() -> None:
     if not WORLD_DIR.exists():
         sys.exit("Error: 'world/' directory not found. Run from your game's root folder.")
@@ -528,6 +538,11 @@ def main() -> None:
             direction = rest.lower().strip()
             exits = rooms[current_room].get("exits", {})
             if direction in exits:
+                blocking = check_block(current_room, "exits", direction)
+                print("blocking", blocking)
+                if blocking:
+                    run_ink_story(blocking, current_room)
+                    continue
                 current_room = exits[direction]
                 display_room(current_room)
                 accosting = check_accost(current_room)
@@ -542,6 +557,10 @@ def main() -> None:
             item = rest.lower().strip()
             room_items = rooms[current_room].get("items", [])
             if item in room_items:
+                blocking = check_block(current_room, "items", direction)
+                if blocking:
+                    run_ink_story(blocking, current_room)
+                    continue
                 room_items.remove(item)
                 world_state["player"].setdefault("inventory", []).append(item)
                 print(f"  You pick up the {item}.")

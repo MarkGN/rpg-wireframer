@@ -1,8 +1,6 @@
-name: Eve
+name: Zorro
 description: Hello, handsome!
 portrait: null
-hp: 3
-damage: 1
 inventory: []
 money: 100
 location: red-town

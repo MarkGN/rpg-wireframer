@@ -2,6 +2,4 @@ room: red-armory
 description: A shop selling weapons.
 exits: 
   town: red-town
-npcs:
-  - charlie
 items: []

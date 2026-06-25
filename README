@@ -17,8 +17,8 @@ assets/
   maps/          ← referenced by room name, used from layer 2 upward
   sprites/       ← used from layer 3 upward
 runners/
-  text/          ← Python, ~300 lines
-  visual/        ← Python + pygame or similar, ~500 lines
+  text.py          ← Python, ~300 lines
+  visual.py        ← Python + pygame or similar, ~500 lines
   export/
     godot/
     rpgmaker/
@@ -28,11 +28,13 @@ runners/
 These should be YAML files. The following are keywords:
 
 accosts = False: If True, they talk to you as soon as you enter an area. Useful for enemies or shopkeepers.
+guards-exits = []: A list of exits. If you try to use the exit, this NPC will accost you and prevent it. Useful for doorkeepers.
+guards-items = []: A list of items. If you try to take the item, this NPC will accost you and prevent it.
 name = "": Their display name.
 description = "": A description. This is used in text mode only, not exported, but it's good practice to document.
 portrait = {filename without .yaml}.png: Their default portrait. Recommended to use filename-happy.png, etc.
 location: Where they spawn into the world. You can pass a list for characters that might want to be in multiple locations at once, eg generic shopkeepers or enemies where you can't be bothered spawning unique NPCs.
-inventory = []: A list of items. It's recommended to use inventory to store other game objects you might collect such as skills.
+inventory = []: A list of items. You might use inventory to store other game objects you might collect such as skills: you might not in your final game, but it can simplify your code for the wireframe.
 money = 0.
 
 Additionally, you can set whatever other variables you might want to use in your game, such as hp, gold, inventory, etc, using the same syntax.

@@ -2,8 +2,6 @@ accosts: True
 name: Bandit Bob
 description: Bob is a handsome man with a sword and a bandana. He looks like he's up to no good.
 portrait: null
-hp: 3
-damage: 1
 inventory:
   - sword
 money: 10
