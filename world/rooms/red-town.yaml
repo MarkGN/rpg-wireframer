@@ -1,0 +1,8 @@
+room: red-town
+description: A small town with red buildings. There's a gate to the north leading to the fields, an armory in the east, and a wizard's tower in the west.
+exits: 
+  gate: field
+  armory: red-armory
+  wizard: red-wizard
+npcs: []
+items: []

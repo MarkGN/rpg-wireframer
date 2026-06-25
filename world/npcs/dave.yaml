@@ -1,0 +1,8 @@
+name: Dave
+description: Dave is a handsome guy.
+portrait: null
+hp: 3
+damage: 1
+money: 200
+location: red-town
+has_met_player: False

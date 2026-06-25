@@ -1,0 +1,136 @@
+# Introduction
+
+A tool for wireframing role-playing games.
+
+Wireframer is an engine-agnostic tool for script-first RPG design. With this, you can write locations, NPC dialogue, interactive items, and relationships between all these; test everything works as intended; and then export to a format ready to be used directly with the game engine and assets. It's designed for iterative development: if you change your mind during level-building, it's easy to edit the game's script within Wireframer. For example, if during development you change your mind between a 2D side-scroller and top-down 2D, the same scripts should work for both, the changes necessary should all relate to the engine and visual assets.
+
+# Directory structure
+
+world/
+  rooms/         ← YAML, engine-agnostic forever
+  npcs/          ← schedules, stats, flags
+  items/
+  pc.yaml
+dialogue/        ← .ink files, also engine-agnostic
+assets/
+  portraits/     ← referenced by NPC name, used from layer 2 upward
+  maps/          ← referenced by room name, used from layer 2 upward
+  sprites/       ← used from layer 3 upward
+runners/
+  text/          ← Python, ~300 lines
+  visual/        ← Python + pygame or similar, ~500 lines
+  export/
+    godot/
+    rpgmaker/
+
+# NPCs
+
+These should be YAML files. The following are keywords:
+
+accosts = False: If True, they talk to you as soon as you enter an area. Useful for enemies or shopkeepers.
+name = "": Their display name.
+description = "": A description. This is used in text mode only, not exported, but it's good practice to document.
+portrait = {filename without .yaml}.png: Their default portrait. Recommended to use filename-happy.png, etc.
+location: Where they spawn into the world. You can pass a list for characters that might want to be in multiple locations at once, eg generic shopkeepers or enemies where you can't be bothered spawning unique NPCs.
+inventory = []: A list of items. It's recommended to use inventory to store other game objects you might collect such as skills.
+money = 0.
+
+Additionally, you can set whatever other variables you might want to use in your game, such as hp, gold, inventory, etc, using the same syntax.
+
+## PC
+
+This follows the same structure as an NPC, but has some additional keywords:
+
+spawn = null: Which map to begin the game in.
+
+# External functions
+
+These are functions you're likely to use in a lot of games. Values can be nested, using . notation.
+
+`get(var_name)`: `var_name` some numeric global variable.
+
+Return the variable's value. Only usable for numbers.
+
+`It'll cost you {item.price} gold.`
+
+`get_str(var_name)`: `var_name` some string global variable.
+
+Return the variable's value. Only usable for strings.
+
+`Pleased to meet you, {player.name}!`
+
+`increase(var_name, amount)`: `var_name` some numeric global variable, `amount` numeric. 
+
+Increase a variable by some amount. Set `amount` negative to subtract.
+
+`~ increase(player.gold, item.price)`
+
+`set(var_name, amount)`: `var_name` some global variable, `amount` some value.
+
+Set a variable to some value.
+
+`~ set(player.hp, player.max_hp)`
+
+`spend(var_name, amount)`: `var_name` some numeric global variable, `amount` numeric > 0.
+
+Check if a variable is higher than some amount and subtract if so and return true, otherwise return false. Useful for buying things.
+
+`{ spend(player.gold, item.price):`
+`  ~ add(player.inventory, item)`
+`    Thank you, please come again.`
+`  - else:`
+`    You can't afford it.`
+`}`
+
+`shop(stock, restock=True, sells=True, buys=False, sell_markup=1, buy_discount = 0.5)`: `stock` a list of object with names and prices, `restock` a boolean for whether it should provide unlimited items as opposed to depleting, `sells` a boolean for whether the shopkeeper sells to the player, `buys` a boolean for whether the shop buys from the player, `sell_markup` a multiplier for how many times an item's price do they charge to buy, `buy_discount` a multiplier for how many times an item's price will they pay for it.
+
+Create a shop dialogue.
+
+` ~ shop(alice.inventory, False)`
+
+`has(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
+
+See if a list contains an item. Can check if it has a certain amount of an item.
+
+`~ has(player.inventory, gold_piece, 10)`
+
+`add(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
+
+Add an item to a list.
+
+`~ add(player.inventory, item)`
+
+`remove(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
+
+Remove an item (or multiple copies of it) from a list.
+
+`~ remove(player.inventory, invitation)`
+
+`sell(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
+
+Check if a list contains (some amount of copies of) an item and remove them. Useful for selling things.
+
+`{ sell(player.inventory, gem):`
+`  ~ add(player.gold, gem.price)`
+`    Thank you, please come again.`
+`  - else:`
+`    You can't sell what you don't have.`
+`}`
+
+`at(npc, map)`: `npc` an NPC hanlde, `map` a map handle.
+
+Check if an NPC is in a map.
+
+`~ at(bandit_bob, highway_melbourne_sydney)`
+
+`move(npc, from, to)`: `npc` an NPC handle, `from` a map handle, `to` a map handle.
+
+Move an NPC from one map to another.
+
+`~ move(alice, warehouse, shop)`
+
+`kill(npc)`: `npc` an NPC handle.
+
+Remove an NPC from the game world entirely.
+
+`~ kill(bandit_bob)`

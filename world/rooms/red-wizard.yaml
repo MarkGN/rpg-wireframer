@@ -1,0 +1,7 @@
+room: red-wizard
+description: Alice's magic shop.
+exits: 
+  town: red-town
+npcs:
+  - alice
+items: []

@@ -1,0 +1,9 @@
+room: field
+description: A grassy field. There's a road connecting Red and Blue towns.
+exits: 
+  north: blue-town
+  south: red-town
+npcs:
+  - bob
+items:
+  - magic-carrot

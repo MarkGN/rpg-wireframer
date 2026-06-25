@@ -1,0 +1,10 @@
+accosts: True
+name: Apothecary Alice
+description: Alice is a pretty girl with blonde hair wearing a stained apron.
+portrait: null
+hp: 3
+damage: 1
+money: 30
+inventory:
+  - fireball
+location: red-wizard

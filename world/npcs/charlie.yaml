@@ -1,0 +1,10 @@
+accosts: True
+name: Charlie
+description: Charlie is a big, strong man with a beard.
+portrait: null
+hp: 3
+damage: 1
+money: 50
+inventory:
+  - sword
+location: red-armory
