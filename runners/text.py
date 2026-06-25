@@ -51,6 +51,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+from inkpython import Story
 
 import yaml  # pip install pyyaml
 
@@ -238,13 +239,6 @@ def run_ink_story(npc_id: str, room_id: str) -> None:
     # --- load compiled story ---
     with open(json_path) as f:
         story_data = json.load(f)
-
-    # Lazy import: try inkpy, fall back gracefully.
-    try:
-        from inkpython import Story  # type: ignore
-    except ImportError:
-        print("[engine] inkpy not installed. Run: pip install inkpython")
-        return
 
     story = Story(story_data)
 

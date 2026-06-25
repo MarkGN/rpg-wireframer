@@ -4,6 +4,20 @@ A tool for wireframing role-playing games.
 
 Wireframer is an engine-agnostic tool for script-first RPG design. With this, you can write locations, NPC dialogue, interactive items, and relationships between all these; test everything works as intended; and then export to a format ready to be used directly with the game engine and assets. It's designed for iterative development: if you change your mind during level-building, it's easy to edit the game's script within Wireframer. For example, if during development you change your mind between a 2D side-scroller and top-down 2D, the same scripts should work for both, the changes necessary should all relate to the engine and visual assets.
 
+# Installation
+
+For the text runner only:
+
+`pip install pyyaml inkpython`
+
+`python runners/text.py`
+
+For the visual runner:
+
+`pip install pygame`
+
+`python runners/visual.py`
+
 # Directory structure
 
 world/
