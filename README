@@ -49,36 +49,36 @@ spawn = null: Which map to begin the game in.
 
 These are functions you're likely to use in a lot of games. Values can be nested, using . notation.
 
-`get(var_name)`: `var_name` some numeric global variable.
+`get("var_name")`: `var_name` some numeric global variable.
 
 Return the variable's value. Only usable for numbers.
 
 `It'll cost you {item.price} gold.`
 
-`get_str(var_name)`: `var_name` some string global variable.
+`get_str("var_name")`: `var_name` some string global variable.
 
 Return the variable's value. Only usable for strings.
 
 `Pleased to meet you, {player.name}!`
 
-`increase(var_name, amount)`: `var_name` some numeric global variable, `amount` numeric. 
+`increase("var_name", amount)`: `var_name` some numeric global variable, `amount` numeric. 
 
 Increase a variable by some amount. Set `amount` negative to subtract.
 
 `~ increase(player.gold, item.price)`
 
-`set(var_name, amount)`: `var_name` some global variable, `amount` some value.
+`set("var_name", value)`: `var_name` some global variable, `value` some value.
 
 Set a variable to some value.
 
-`~ set(player.hp, player.max_hp)`
+`~ set("player.hp", get("player.max_hp"))`
 
 `spend(var_name, amount)`: `var_name` some numeric global variable, `amount` numeric > 0.
 
 Check if a variable is higher than some amount and subtract if so and return true, otherwise return false. Useful for buying things.
 
-`{ spend(player.gold, item.price):`
-`  ~ add(player.inventory, item)`
+`{ spend("player.gold", "item.price"):`
+`  ~ add("player.inventory", item)`
 `    Thank you, please come again.`
 `  - else:`
 `    You can't afford it.`
@@ -88,32 +88,32 @@ Check if a variable is higher than some amount and subtract if so and return tru
 
 Create a shop dialogue.
 
-` ~ shop(alice.inventory, False)`
+` ~ shop("alice.inventory", false)`
 
 `has(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
 
 See if a list contains an item. Can check if it has a certain amount of an item.
 
-`~ has(player.inventory, gold_piece, 10)`
+`~ has("player.inventory", "gold_piece", 10)`
 
 `add(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
 
 Add an item to a list.
 
-`~ add(player.inventory, item)`
+`~ add("player.inventory", item)`
 
 `remove(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
 
 Remove an item (or multiple copies of it) from a list.
 
-`~ remove(player.inventory, invitation)`
+`~ remove("player.inventory", "invitation")`
 
 `sell(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
 
 Check if a list contains (some amount of copies of) an item and remove them. Useful for selling things.
 
-`{ sell(player.inventory, gem):`
-`  ~ add(player.gold, gem.price)`
+`{ sell("player.inventory", gem):`
+`  ~ add("player.gold", get("gem.price"))`
 `    Thank you, please come again.`
 `  - else:`
 `    You can't sell what you don't have.`
@@ -123,16 +123,10 @@ Check if a list contains (some amount of copies of) an item and remove them. Use
 
 Check if an NPC is in a map.
 
-`~ at(bandit_bob, highway_melbourne_sydney)`
+`~ at("bob", highway_melbourne_sydney)`
 
-`move(npc, from, to)`: `npc` an NPC handle, `from` a map handle, `to` a map handle.
+`move(npc, to)`: `npc` an NPC handle, `to` a map handle.
 
-Move an NPC from one map to another.
+Move an NPC to a map or list of maps.
 
-`~ move(alice, warehouse, shop)`
-
-`kill(npc)`: `npc` an NPC handle.
-
-Remove an NPC from the game world entirely.
-
-`~ kill(bandit_bob)`
+`~ move("alice", "")` # remove her from game world
