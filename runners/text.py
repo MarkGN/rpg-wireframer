@@ -318,6 +318,7 @@ def run_ink_story(npc_id: str, room_id: str) -> None:
             for i in ext_get(sales_inventory):
                 with open("world/items/"+i+".yaml", "r") as file:
                     items.append(yaml.safe_load(file))
+                    items[-1]["handle"] = i
             for i, item in enumerate(items, 1):
                 print(f'  {i}. {item["name"]} — ${item["price"]}')
             print("  0. Leave")
@@ -329,7 +330,7 @@ def run_ink_story(npc_id: str, room_id: str) -> None:
                 price = item["price"]
                 if world_state["player"]["money"] >= price:
                     world_state["player"]["money"] -= price
-                    ext_add_item("player.inventory", item)
+                    ext_add_item("player.inventory", item["handle"])
                     print(f"  You buy the {item["name"]} for ${price}.")
                 else:
                     print("  You can't afford that.")
@@ -500,12 +501,22 @@ def main() -> None:
         run_ink_story(accosting, current_room)
 
     while True:
-        try:
-            raw = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye.")
-            break
 
+        
+        locs = [("Go to "+location, "go "+location) for location in rooms[current_room]["exits"]]
+        present_npcs = [("Talk to "+npc, "t "+npc) for npc in npcs_in_room(current_room)]
+        items = [("Take "+item, "take "+item) for item in rooms[current_room]["items"]]
+        options = [("Describe", "look"), ("Inventory", "inventory")] + locs + present_npcs + items
+
+        
+        print("  0. Quit game")
+        for i, option in enumerate(options, 1):
+            print(f'  {i}. {option[0]}')
+        choice = input("  > ").strip()
+        if choice == "0":
+            print("Goodbye.")
+            break
+        raw = options[int(choice)-1][1] if (choice.isdigit() and 1 <= int(choice) <= len(options)) else None
         if not raw:
             continue
 
@@ -513,28 +524,19 @@ def main() -> None:
         verb   = parts[0].lower()
         rest   = parts[1] if len(parts) > 1 else ""
 
-        # --- quit ---
-        if verb in ("quit", "q", "exit"):
-            print("Goodbye.")
-            break
-
-        # --- help ---
-        elif verb in ("help", "?"):
-            print_help()
-
         # --- look ---
-        elif verb in ("look", "l", "describe"):
+        if verb == "look":
             display_room(current_room, force_description=True)
 
         # --- inventory ---
-        elif verb in ("inventory", "i", "inv"):
+        elif verb == "inventory":
             inv = world_state["player"].get("inventory", [])
             money = world_state["player"].get("money", 0)
             print(f"\n  Money: {money}")
-            print(f"  Inventory: {', '.join([item.name for item in inv]) if inv else '(empty)'}\n")
+            print(f"  Inventory: {', '.join(inv) if inv else '(empty)'}\n")
 
         # --- go ---
-        elif verb in ("go", "move", "walk", "head"):
+        elif verb == "go":
             direction = rest.lower().strip()
             exits = rooms[current_room].get("exits", {})
             if direction in exits:
@@ -553,7 +555,7 @@ def main() -> None:
                 print(f"  You can't go {direction!r}. Available exits: {available}")
 
         # --- take ---
-        elif verb in ("take", "get", "pick"):
+        elif verb == "take":
             item = rest.lower().strip()
             room_items = rooms[current_room].get("items", [])
             if item in room_items:
@@ -568,7 +570,7 @@ def main() -> None:
                 print(f"  There's no {item!r} here.")
 
         # --- talk ---
-        elif verb in ("talk", "speak", "t"):
+        elif verb == "t":
             if not rest:
                 present = npcs_in_room(current_room)
                 if not present:
@@ -584,14 +586,6 @@ def main() -> None:
                     run_ink_story(npc_id, current_room)
                 else:
                     print(f"  There's nobody called {rest!r} here.")
-
-        # --- shorthand: just a direction ---
-        elif verb in rooms[current_room].get("exits", {}):
-            current_room = rooms[current_room]["exits"][verb]
-            display_room(current_room)
-            accosting = check_accost(current_room)
-            if accosting:
-                run_ink_story(accosting, current_room)
 
         else:
             print(f"  Unknown command {raw!r}. Type 'help' for a list of commands.")
