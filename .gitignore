@@ -1,2 +1,4 @@
 .venv/*
 dialogue/*.ink.json
+runners/__pycache__/*
+dev-scratchpad.md

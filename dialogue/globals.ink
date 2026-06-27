@@ -7,4 +7,4 @@ EXTERNAL remove(target, item)
 EXTERNAL has(target, item)
 EXTERNAL move(npc, location)
 EXTERNAL shop(items)
-EXTERNAL combat(enemy, hp, damage, on_win, on_lose, on_run)
+

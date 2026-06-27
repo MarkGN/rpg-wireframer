@@ -18,24 +18,29 @@ For the visual runner:
 
 `python runners/visual.py`
 
+This will create a project with some dummy data. Feel free to delete all .yaml and .ink files except pc.yaml, which you can edit but not delete. Of course, 
+
 # Directory structure
 
 world/
-  rooms/         ← YAML, engine-agnostic forever
-  npcs/          ← schedules, stats, flags
-  items/
+  rooms/        // .yaml files
+  npcs/         // .yaml files
+  items/        // .yaml files
   pc.yaml
-dialogue/        ← .ink files, also engine-agnostic
+dialogue/       // .ink files
 assets/
-  portraits/     ← referenced by NPC name, used from layer 2 upward
-  maps/          ← referenced by room name, used from layer 2 upward
-  sprites/       ← used from layer 3 upward
+  portraits/    // .png or other image files
+  maps/         // .png or other image files
+  sprites/      // .png or other image files
 runners/
-  text.py          ← Python, ~300 lines
-  visual.py        ← Python + pygame or similar, ~500 lines
+  engine.py     // provides core step-through logic
+  text.py       // provides a text-only interface to engine.py
+  visual.py     // provides a richer visual interface to engine.py
   export/
     godot/
     rpgmaker/
+tests/
+  engine/       // tests confirming the engine achieves expected state after given inputs
 
 # NPCs
 
