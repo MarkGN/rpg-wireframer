@@ -46,6 +46,8 @@ def main() -> None:
                 continue
             # have $world apply choice
             world.handle_action(raw[0], raw[1])
+            if raw[0] == "a":
+                print(f"  You pick up the {raw[1]}.")
 
 if __name__ == "__main__":
     main()

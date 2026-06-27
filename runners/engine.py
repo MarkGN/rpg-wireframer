@@ -297,9 +297,6 @@ class World:
                         return
                     room_items.remove(target)
                     self.world_state["player"].setdefault("inventory", []).append(target)
-                    print(f"  You pick up the {target}.")
-                else:
-                    print(f"  There's no {target} here.")
             else:
                 return ValueError(f"Invalid action: {action} {target}")
 
