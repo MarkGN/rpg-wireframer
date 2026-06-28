@@ -327,17 +327,6 @@ class World:
 
         self.story = Story(story_data)
 
-        # TODO this
-        # # --- inject context variables ---
-        # def try_set(var, value):    
-        #     self.story.variablesState.set(var, value)
-
-        # # try_set("player_money",   self.world_state["player"]["money"])
-        # # try_set("npc_location",  self.current_room)
-
-        # for key, value in self.world_state.get(npc_id, {}).items():
-        #     try_set(npc_id + "." + key, value)
-
         # --- register external functions ---
 
         def ext_get(key):
@@ -416,6 +405,12 @@ class World:
                 else:
                     print("  Invalid choice.")
 
+        def ext_begin_combat(*outcomes):
+            return NotImplementedError
+        
+        def ext_end_combat(*outcomes):
+            return NotImplementedError
+
 
         self.story.BindExternalFunction("get",          ext_get)
         self.story.BindExternalFunction("set",          ext_set)
@@ -426,6 +421,8 @@ class World:
         self.story.BindExternalFunction("move",         ext_move_npc)
         self.story.BindExternalFunction("at",           ext_at_npc)
         self.story.BindExternalFunction("shop",         ext_shop)
+        self.story.BindExternalFunction("begin_combat", ext_begin_combat)
+        self.story.BindExternalFunction("end_combat",   ext_end_combat)
 
         self.step_story()
 
