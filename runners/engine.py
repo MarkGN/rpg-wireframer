@@ -127,6 +127,7 @@ class World:
         self.dialogue_partner: str | None = None
         self.story: Story | None = None
         self.last_story_text: str | None = None
+        self.combat_options: dict[str, str] | None = None
 
 
     def load_world(self) -> None:
@@ -239,7 +240,9 @@ class World:
     
     def get_actions(self):
         """Return a list of valid actions."""
-        if self.dialogue_partner and self.story and (self.story.canContinue or self.story.currentChoices):
+        if self.combat_options:
+            return [("f",key) for (key,_) in self.combat_options]
+        elif self.dialogue_partner and self.story and (self.story.canContinue or self.story.currentChoices):
             if self.story.canContinue:
                 return [("c", "-continue-")]
             elif self.story.currentChoices:
@@ -252,20 +255,24 @@ class World:
             return options
         
     def handle_action(self, action: str, target: str):
-        if self.story:
+        if self.combat_options:
+            self.story.ChoosePathString(dict(self.combat_options)[target])
+            self.last_story_text = target
+            self.combat_options = None
+        elif self.story:
+            self.last_story_text = ""
             if self.story.canContinue:
                 lines = []
                 while self.story.canContinue:
                     lines.append(self.story.Continue().strip())
                 self.last_story_text = "\n".join(lines)
-            elif self.story.currentChoices:
+            if self.story.currentChoices:
                 ix = [c.text for c in self.story.currentChoices].index(target)
                 self.story.ChooseChoiceIndex(ix)
-                self.last_story_text = self.story.Continue().strip()
-            if not (self.story.canContinue or self.story.currentChoices):
+                self.last_story_text += self.story.Continue().strip()
+            if not (self.story.canContinue or self.story.currentChoices or self.combat_options):
                 # self.dialogue_partner = None
                 self.story = None
-
         else:
             self.last_story_text = None
             if action == "g":
@@ -331,14 +338,14 @@ class World:
 
         def ext_get(key):
             terms = key.split('.')
-            value = self.world_state
+            value = self.npcs if terms[-1] in NPC_KEYWORDS else self.world_state
             for term in terms:
                 value = value[term]
             return value
 
         def ext_set(key, value):
             terms = key.split('.')
-            d = self.world_state
+            d = self.npcs if terms[-1] in NPC_KEYWORDS else self.world_state
             for term in terms[:-1]:
                 d = d[term]
             d[terms[-1]] = value
@@ -405,11 +412,13 @@ class World:
                 else:
                     print("  Invalid choice.")
 
-        def ext_begin_combat(*outcomes):
-            return NotImplementedError
-        
-        def ext_end_combat(*outcomes):
-            return NotImplementedError
+        def ext_combat(outcomes_string):
+            outcomes = [s.strip() for s in outcomes_string.split(",")]
+            it = iter(outcomes)
+            options = list(zip(it, it))
+            self.combat_options = options
+            return
+
 
 
         self.story.BindExternalFunction("get",          ext_get)
@@ -421,8 +430,7 @@ class World:
         self.story.BindExternalFunction("move",         ext_move_npc)
         self.story.BindExternalFunction("at",           ext_at_npc)
         self.story.BindExternalFunction("shop",         ext_shop)
-        self.story.BindExternalFunction("begin_combat", ext_begin_combat)
-        self.story.BindExternalFunction("end_combat",   ext_end_combat)
+        self.story.BindExternalFunction("combat",       ext_combat)
 
         self.step_story()
 

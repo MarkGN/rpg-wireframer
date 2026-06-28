@@ -2,7 +2,8 @@ from engine import World
 
 def verb_char_to_english(verb):
     lookup = {"a": "Take",
-              "c": "",
+              "c": "", # chat
+              "f": "", # fight
               "g": "Go to",
               "t": "Talk to"
               }
@@ -13,7 +14,11 @@ def main() -> None:
 
     while True:
         # get and print context from world
-        if world.last_story_text:
+        if world.combat_options:
+            print("#"*30)
+            print("You are in combat right now!")
+            print("#"*30)
+        elif world.last_story_text:
             print("#"*30)
             print(world.npcs.get(world.dialogue_partner,None).get("name", None))
             print(world.last_story_text)
