@@ -59,13 +59,13 @@ import yaml  # pip install pyyaml
 # Paths
 # ---------------------------------------------------------------------------
 
-WORLD_DIR   = Path("world")
-ROOMS_DIR   = WORLD_DIR / "rooms"
-NPCS_DIR    = WORLD_DIR / "npcs"
-ITEMS_DIR   = WORLD_DIR / "items"
-PC_FILE     = WORLD_DIR / "pc.yaml"
-FLAGS_FILE  = WORLD_DIR / "flags.yaml"
-DIALOGUE_DIR = Path("dialogue")
+WORLD_DIR: str      = Path("world")
+ROOMS_DIR: str      = WORLD_DIR / "rooms"
+NPCS_DIR: str       = WORLD_DIR / "npcs"
+ITEMS_DIR: str      = WORLD_DIR / "items"
+PC_FILE: str        = WORLD_DIR / "pc.yaml"
+FLAGS_FILE: str     = WORLD_DIR / "flags.yaml"
+DIALOGUE_DIR: str   = Path("dialogue")
 
 # Fields that are engine keywords and should NOT be dumped into world_state.
 NPC_KEYWORDS = {"name", "description", "portrait", "location", "locations",
@@ -119,6 +119,7 @@ def load_yaml(path: Path) -> dict:
 class World:
     def __init__(self):
         self.world_state: dict[str, Any] = defaultdict(dict)
+        self.flag: dict[str, Any] = defaultdict(dict)
         self.rooms:  dict[str, dict] = {}   # room_id → room data
         self.items:   dict[str, dict] = {}   # item_id  → item data
         self.npcs:   dict[str, dict] = {}   # npc_id  → npc metadata
@@ -191,11 +192,11 @@ class World:
         return location
 
 
-    def npcs_in_room(self, room_id: str) -> list[str]:
+    def npcs_in_room(self) -> list[str]:
         """Return npc_ids whose current location includes this room."""
         present = []
         for npc_id, meta in self.npcs.items():
-            if room_id in meta["locations"]:
+            if self.current_room in meta["locations"]:
                 present.append(npc_id)
         return present
 
@@ -217,7 +218,7 @@ class World:
         output["handle"] = self.current_room
         output["name"] = room.get('name', self.current_room)
         output["description"] = room.get("description", "")
-        output["npcs"] = self.npcs_in_room(self.current_room)
+        output["npcs"] = self.npcs_in_room()
         output["items"] = room.get("items", [])
         output["exits"] = room.get("exits", {})
         return output
@@ -225,20 +226,20 @@ class World:
 
     def check_accost(self) -> str | None:
         """Return the first accosting NPC in this room, if any."""
-        for npc_id in self.npcs_in_room(self.current_room):
+        for npc_id in self.npcs_in_room():
             if self.npcs[npc_id].get("accosts", False):
                 return npc_id
         return None
 
     def check_block(self, category, target) -> str | None:
         """Return the first accosting NPC, if any"""
-        for npc_id in self.npcs_in_room(self.current_room):
+        for npc_id in self.npcs_in_room():
             guards = self.npcs[npc_id].get("guards-"+category, {})
             if target in guards:
                 return npc_id
         return None
     
-    def get_actions(self):
+    def get_actions(self) -> list[tuple[str, str]]:
         """Return a list of valid actions."""
         if self.combat_options:
             return [("f",key) for (key,_) in self.combat_options]
@@ -249,12 +250,12 @@ class World:
                 return [("c",choice.text) for choice in self.story.currentChoices]
         else:
             locs = [("g",location) for location in self.rooms[self.current_room]["exits"]]
-            present_npcs = [("t",npc) for npc in self.npcs_in_room(self.current_room)]
+            present_npcs = [("t",npc) for npc in self.npcs_in_room()]
             items = [("a",item) for item in self.rooms[self.current_room]["items"]]
             options = locs + present_npcs + items
             return options
         
-    def handle_action(self, action: str, target: str):
+    def handle_action(self, action: str, target: str) -> None:
         if self.combat_options:
             self.story.ChoosePathString(dict(self.combat_options)[target])
             self.last_story_text = target
@@ -379,8 +380,8 @@ class World:
             if item in d[terms[-1]]:
                 d[terms[-1]].remove(item)
 
-        def ext_at_npc(npc, location):
-            return npc in self.npcs_in_room(location)
+        def ext_at_npc(npc):
+            return npc in self.npcs_in_room()
 
         def ext_move_npc(npc, location):
             self.move_npc(npc, location)
@@ -428,7 +429,7 @@ class World:
         self.story.BindExternalFunction("remove",       ext_remove_item)
         self.story.BindExternalFunction("has",          ext_has_item)
         self.story.BindExternalFunction("move",         ext_move_npc)
-        self.story.BindExternalFunction("at",           ext_at_npc)
+        self.story.BindExternalFunction("present",      ext_at_npc)
         self.story.BindExternalFunction("shop",         ext_shop)
         self.story.BindExternalFunction("combat",       ext_combat)
 
