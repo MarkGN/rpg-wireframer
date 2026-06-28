@@ -2,7 +2,7 @@ room: field
 name: Vibrant meadow
 description: A grassy field. There's a road connecting Red and Blue towns.
 exits: 
-  blue town: blue-town
-  red town: red-town
+  Blue Town: blue-town
+  Red Town: red-town
 items:
   - flower

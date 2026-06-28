@@ -2,5 +2,5 @@ room: red-armory
 name: Charlie's Smithy
 description: A shop selling weapons.
 exits: 
-  town: red-town
+  Town: red-town
 items: []
