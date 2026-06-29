@@ -2,3 +2,5 @@
 dialogue/*.ink.json
 runners/__pycache__/*
 dev-scratchpad.md
+tests/__pycache__/test_engine.cpython-312-pytest-9.1.1.pyc
+debug/engine.pyi/runners/engine.pyi

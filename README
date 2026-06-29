@@ -18,7 +18,13 @@ For the visual runner:
 
 `python runners/visual.py`
 
-This will create a project with some dummy data. Feel free to delete all .yaml and .ink files except pc.yaml, which you can edit but not delete. Of course, 
+This will create a project with some dummy data. Feel free to delete all .yaml and .ink files except pc.yaml, which you can edit but not delete. You might want to leave them there awhile as bonus documentation.
+
+To test:
+
+`pip install pytest`
+
+`python -m pytest`
 
 # Directory structure
 
