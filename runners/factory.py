@@ -1,7 +1,8 @@
-from contexts.combat import Combat
-from contexts.dialogue import Dialogue
-from contexts.explore import Explore
-from contexts.shop import Shop
+from .contexts.combat import Combat
+from .contexts.dialogue import Dialogue
+from .contexts.explore import Explore
+from .contexts.shop import Shop
+
 
 class ContextFactory:
     def create(self, name, **kwargs):

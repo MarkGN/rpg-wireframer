@@ -1,8 +1,8 @@
 test:
-	python -m pytest
+	PYTHONPATH=. python -m pytest
 
 run:
-	python runners/text.py
+	PYTHONPATH=. python -m runners.text
 
 lint:
 	ruff check .

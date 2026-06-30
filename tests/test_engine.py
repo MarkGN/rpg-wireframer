@@ -20,12 +20,12 @@ def test_player_can_pick_up_sword():
     actions = [
         ("t", "dave"),
         ("c", "-continue-"),
+        ('c', 'end dialogue'),
         ("g", "Blacksmith"),
         ("c", "Buy"),
-        "TODO: turns out shopping hasn't been properly decoupled yet, oops",
+        ("b", "sword")
     ]
     for verb, target in actions:
         world.handle_action(verb, target)
 
-    assert "sword" not in world.world_state["player"]["inventory"]
-    # dave, continue, smith, buy, sword
+    assert "sword" in world.world_state["player"]["inventory"]

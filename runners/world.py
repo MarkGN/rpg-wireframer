@@ -53,7 +53,8 @@ import yaml
 
 from typing import TYPE_CHECKING
 
-from factory import ContextFactory
+from .factory import ContextFactory
+
 if TYPE_CHECKING:
     from context import Context
 
@@ -62,29 +63,42 @@ if TYPE_CHECKING:
 # Paths
 # ---------------------------------------------------------------------------
 
-WORLD_DIR: str      = Path("world")
-ROOMS_DIR: str      = WORLD_DIR / "rooms"
-NPCS_DIR: str       = WORLD_DIR / "npcs"
-ITEMS_DIR: str      = WORLD_DIR / "items"
-PC_FILE: str        = WORLD_DIR / "pc.yaml"
-FLAGS_FILE: str     = WORLD_DIR / "flags.yaml"
+WORLD_DIR: str = Path("world")
+ROOMS_DIR: str = WORLD_DIR / "rooms"
+NPCS_DIR: str = WORLD_DIR / "npcs"
+ITEMS_DIR: str = WORLD_DIR / "items"
+PC_FILE: str = WORLD_DIR / "pc.yaml"
+FLAGS_FILE: str = WORLD_DIR / "flags.yaml"
 
 # Fields that are engine keywords and should NOT be dumped into world_state.
-NPC_KEYWORDS = {"name", "description", "portrait", "location", "locations",
-                "dialogue", "accosts", "guards-exits", "guards-items", "inventory"}
+NPC_KEYWORDS = {
+    "name",
+    "description",
+    "portrait",
+    "location",
+    "locations",
+    "dialogue",
+    "accosts",
+    "guards-exits",
+    "guards-items",
+    "inventory",
+}
 
 
 # ---------------------------------------------------------------------------
 # Loader
 # ---------------------------------------------------------------------------
 
+
 def load_yaml(path: Path) -> dict:
     with open(path) as f:
         return yaml.safe_load(f) or {}
 
+
 # ---------------------------------------------------------------------------
 # World state
 # ---------------------------------------------------------------------------
+
 
 # world_state["player"]  — PC stats, inventory, flags
 # world_state["<npc_id>"] — per-NPC variables (hp, money, flags, …)
@@ -93,15 +107,14 @@ class World:
     def __init__(self):
         self.world_state: dict[str, Any] = defaultdict(dict)
         self.flag: dict[str, Any] = defaultdict(dict)
-        self.rooms:  dict[str, dict] = {}   # room_id → room data
-        self.items:   dict[str, dict] = {}   # item_id  → item data
-        self.npcs:   dict[str, dict] = {}   # npc_id  → npc metadata
-        self.visited: set[str] = set()      # room_ids the player has entered
+        self.rooms: dict[str, dict] = {}  # room_id → room data
+        self.items: dict[str, dict] = {}  # item_id  → item data
+        self.npcs: dict[str, dict] = {}  # npc_id  → npc metadata
+        self.visited: set[str] = set()  # room_ids the player has entered
         self.context_stack: list[Context] = []
         self.context_factory: ContextFactory = None
         self.current_room: str = None
         self.load_world()
-
 
     def load_world(self) -> None:
         """Load all yaml files."""
@@ -153,9 +166,9 @@ class World:
         # PC
         pc_data = load_yaml(PC_FILE)
         self.world_state["player"] = {
-            "name":      pc_data.get("name", "Player"),
+            "name": pc_data.get("name", "Player"),
             "inventory": list(pc_data.get("inventory", [])),
-            "money":      pc_data.get("money", 0)
+            "money": pc_data.get("money", 0),
         }
 
         location = pc_data.get("location")
@@ -166,26 +179,25 @@ class World:
         self.current_room = location
 
     def get_state(self, key):
-        terms = key.split('.')
+        terms = key.split(".")
         value = self.npcs if terms[-1] in NPC_KEYWORDS else self.world_state
         for term in terms:
             value = value[term]
         return value
 
     def set_state(self, key, value):
-            terms = key.split('.')
-            d = self.npcs if terms[-1] in NPC_KEYWORDS else self.world_state
-            for term in terms[:-1]:
-                d = d[term]
-            d[terms[-1]] = value
+        terms = key.split(".")
+        d = self.npcs if terms[-1] in NPC_KEYWORDS else self.world_state
+        for term in terms[:-1]:
+            d = d[term]
+        d[terms[-1]] = value
 
     def add_item(self, key, item):
-            terms = key.split('.')
-            d = self.world_state
-            for term in terms[:-1]:
-                d = d[term]
-            d[terms[-1]].append(item)
-
+        terms = key.split(".")
+        d = self.world_state
+        for term in terms[:-1]:
+            d = d[term]
+        d[terms[-1]].append(item)
 
     def npcs_in_room(self) -> list[str]:
         """Return npc_ids whose current location includes this room."""
@@ -195,7 +207,6 @@ class World:
                 present.append(npc_id)
         return present
 
-
     def display_room(self) -> None:
         output = dict()
         room = self.rooms[self.current_room]
@@ -203,13 +214,12 @@ class World:
         if first_visit:
             self.visited.add(self.current_room)
         output["handle"] = self.current_room
-        output["name"] = room.get('name', self.current_room)
+        output["name"] = room.get("name", self.current_room)
         output["description"] = room.get("description", "")
         output["npcs"] = self.npcs_in_room()
         output["items"] = room.get("items", [])
         output["exits"] = room.get("exits", {})
         return output
-
 
     def check_accost(self) -> str | None:
         """Return the first accosting NPC in this room, if any."""
@@ -221,18 +231,18 @@ class World:
     def check_block(self, category, target) -> str | None:
         """Return the first accosting NPC, if any"""
         for npc_id in self.npcs_in_room():
-            guards = self.npcs[npc_id].get("guards-"+category, {})
+            guards = self.npcs[npc_id].get("guards-" + category, {})
             if target in guards:
                 return npc_id
         return None
-    
+
     def get_actions(self) -> list[tuple[str, str]]:
         """Return a list of valid actions."""
         return self.get_context().actions(self)
-        
+
     def handle_action(self, verb: str, target: str) -> None:
         self.get_context().apply(verb, target, self)
-            
+
     def get_context(self) -> Context:
         return self.context_stack[-1]
 

@@ -1,17 +1,28 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from world import World
-from context import Context
+from ..context import Context
 from inkpython import Story
 import json
 from pathlib import Path
 import subprocess
 
-DIALOGUE_DIR: str   = Path("dialogue")
-NPC_KEYWORDS = {"name", "description", "portrait", "location", "locations",
-                "dialogue", "accosts", "guards-exits", "guards-items"}
+DIALOGUE_DIR: str = Path("dialogue")
+NPC_KEYWORDS = {
+    "name",
+    "description",
+    "portrait",
+    "location",
+    "locations",
+    "dialogue",
+    "accosts",
+    "guards-exits",
+    "guards-items",
+}
 TALK = "c"
+
 
 class Dialogue(Context):
     """
@@ -21,7 +32,6 @@ class Dialogue(Context):
     def __init__(self, npc):
         self.npc: str = npc
         self.last_text: str = ""
-
 
     def on_enter(self, world: World) -> None:
         """
@@ -58,14 +68,14 @@ class Dialogue(Context):
             world.set_state(key, value)
 
         def ext_increase(key, value):
-            terms = key.split('.')
+            terms = key.split(".")
             d = world.world_state
             for term in terms[:-1]:
                 d = d[term]
             d[terms[-1]] += value
 
         def ext_has_item(key, item) -> int:
-            terms = key.split('.')
+            terms = key.split(".")
             value = world.world_state
             for term in terms:
                 value = value[term]
@@ -75,7 +85,7 @@ class Dialogue(Context):
             world.add_item(key, item)
 
         def ext_remove_item(key, item):
-            terms = key.split('.')
+            terms = key.split(".")
             d = world.world_state
             for term in terms[:-1]:
                 d = d[term]
@@ -96,18 +106,16 @@ class Dialogue(Context):
             world.push_context("combat", outcomes=outcomes_string)
             return
 
-
-
-        self.story.BindExternalFunction("get",          ext_get)
-        self.story.BindExternalFunction("set",          ext_set)
-        self.story.BindExternalFunction("increase",     ext_increase)
-        self.story.BindExternalFunction("add",          ext_add_item)
-        self.story.BindExternalFunction("remove",       ext_remove_item)
-        self.story.BindExternalFunction("has",          ext_has_item)
-        self.story.BindExternalFunction("move",         ext_move_npc)
-        self.story.BindExternalFunction("present",      ext_at_npc)
-        self.story.BindExternalFunction("shop",         ext_shop)
-        self.story.BindExternalFunction("combat",       ext_combat)
+        self.story.BindExternalFunction("get", ext_get)
+        self.story.BindExternalFunction("set", ext_set)
+        self.story.BindExternalFunction("increase", ext_increase)
+        self.story.BindExternalFunction("add", ext_add_item)
+        self.story.BindExternalFunction("remove", ext_remove_item)
+        self.story.BindExternalFunction("has", ext_has_item)
+        self.story.BindExternalFunction("move", ext_move_npc)
+        self.story.BindExternalFunction("present", ext_at_npc)
+        self.story.BindExternalFunction("shop", ext_shop)
+        self.story.BindExternalFunction("combat", ext_combat)
 
         self.step_story()
 
@@ -117,7 +125,7 @@ class Dialogue(Context):
     #         self.step_story()
     #     self.last_text = text
     #     return
-    
+
     def step_story(self) -> None:
         text = ""
 
@@ -132,7 +140,6 @@ class Dialogue(Context):
 
         self.last_text = text
 
-
     def actions(self, world: World):
         if self.story.canContinue:
             return [(TALK, "-continue-")]
@@ -140,7 +147,6 @@ class Dialogue(Context):
             return [(TALK, choice.text) for choice in self.story.currentChoices]
         else:
             return [(TALK, "end dialogue")]
-        
 
     # With dialogues, the verb is always "keep talking"
     def apply(self, verb: str, target: str, world: World):
@@ -158,7 +164,6 @@ class Dialogue(Context):
         else:
             world.pop_context()
 
-
     def on_resume(self, world, **kwargs):
         if "goto" in kwargs:
             self.story.ChoosePathString(kwargs.get("goto"))
@@ -168,6 +173,7 @@ class Dialogue(Context):
 # ---------------------------------------------------------------------------
 # Ink integration
 # ---------------------------------------------------------------------------
+
 
 def ink_json_path(ink_filename: str) -> Path | None:
     """Return path to compiled .ink.json, compiling with inklecate if needed."""
@@ -182,7 +188,8 @@ def ink_json_path(ink_filename: str) -> Path | None:
     if not json_path.exists() or ink_path.stat().st_mtime > json_path.stat().st_mtime:
         result = subprocess.run(
             ["inklecate", "-o", str(json_path), str(ink_path)],
-            capture_output=True, text=True
+            capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
             print(f"[debug] inklecate return code: {result.returncode}")

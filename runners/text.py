@@ -1,8 +1,10 @@
-from contexts.combat import Combat
-from contexts.dialogue import Dialogue
-from contexts.explore import Explore
-from contexts.shop import Shop
-from world import World
+from .contexts.combat import Combat
+from .contexts.dialogue import Dialogue
+from .contexts.explore import Explore
+from .contexts.shop import Shop
+from .world import World
+
+num_universal_actions = 2
 
 
 def verb_char_to_english(verb):
@@ -12,7 +14,7 @@ def verb_char_to_english(verb):
         "c": "",  # chat
         "f": "",  # fight
         "g": "Go to",
-        "q": "", # quit
+        "q": "",  # quit
         "t": "Talk to",
     }
     return lookup.get(verb, ValueError(f"Unknown verb {verb}"))
@@ -49,7 +51,7 @@ def main() -> None:
         actions = context.actions(world)
         print(0, "Quit game")
         print(1, "Check inventory")
-        for i, (verb, target) in enumerate(actions, 2):
+        for i, (verb, target) in enumerate(actions, num_universal_actions):
             print(i, verb_char_to_english(verb), target)
         # elicit choice
         choice = input("  > ").strip()
@@ -64,12 +66,15 @@ def main() -> None:
         else:
             raw = (
                 actions[int(choice) - 2]
-                if (choice.isdigit() and 2 <= int(choice) <= len(actions) + 2)
+                if (
+                    choice.isdigit()
+                    and 0 <= int(choice) - num_universal_actions <= len(actions)
+                )
                 else None
             )
             if not raw:
                 continue
-            # have $world apply choice
+            # have world apply choice
             print("debug: your action was", raw)
             world.handle_action(raw[0], raw[1])
             if raw[0] == "a":

@@ -1,11 +1,13 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from world import World
-from context import Context
+from ..context import Context
 
 BUY = "b"
 QUIT = "q"
+
 
 class Shop(Context):
     """
@@ -24,7 +26,7 @@ class Shop(Context):
     def actions(self, world: World):
         quit = [(QUIT, "Quit")]
         return [(BUY, item) for item in self.inventory] + quit
-        
+
     def apply(self, verb, target, world: World):
         if verb == QUIT:
             world.pop_context()
