@@ -1,4 +1,4 @@
-from runners.engine import World
+from runners.world import World
 
 
 def test_world_loads():

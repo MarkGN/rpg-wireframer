@@ -15,8 +15,8 @@ You actually seem like a decent guy.
 {get("bob.num_encounters"):
 - 1:
 Ho there! Your money or your life!
-+ My money. -> surrender
-+ My life. -> fight
++ Take my money. -> surrender
++ Bring it on. -> fight
 - 2:
 You again! You won't escape me so easily this time! En garde! 
 -> fight
@@ -32,7 +32,7 @@ You know what? I've got enough cardio for today. You win. I'm not going to rob y
 Huh. No-one ever says that. Sweet. -> lose
 
 === fight
-~ combat("Fight and win, win, Fight and lose, lose, Run away, flee") 
+~ combat("Fight and win > win ; Fight and lose > lose ; Run away > flee") 
 -> END
 
 === win

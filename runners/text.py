@@ -1,12 +1,18 @@
-from engine import World
+from contexts.combat import Combat
+from contexts.dialogue import Dialogue
+from contexts.explore import Explore
+from contexts.shop import Shop
+from world import World
 
 
 def verb_char_to_english(verb):
     lookup = {
         "a": "Take",
+        "b": "Buy",
         "c": "",  # chat
         "f": "",  # fight
         "g": "Go to",
+        "q": "", # quit
         "t": "Talk to",
     }
     return lookup.get(verb, ValueError(f"Unknown verb {verb}"))
@@ -17,23 +23,30 @@ def main() -> None:
 
     while True:
         # get and print context from world
-        if world.combat_options:
+        context = world.get_context()
+        if isinstance(context, Combat):
             print("#" * 30)
             print("You are in combat right now!")
             print("#" * 30)
-        elif world.last_story_text:
+        if isinstance(context, Dialogue):
             print("#" * 30)
-            print(world.npcs.get(world.dialogue_partner, None).get("name", None))
-            print(world.last_story_text)
+            print(world.npcs.get(context.npc, None).get("name", None))
+            print(context.last_text)
             print("#" * 30)
-        else:
+        if isinstance(context, Explore):
             room = world.display_room()
             print("#" * 30)
             print(room.get("name", f'{room.get("handle")} name not found'))
             print(room.get("description", None))
             print("#" * 30)
+        elif isinstance(context, Shop):
+            print("#" * 30)
+            print(context.line)
+            for item in context.inventory:
+                print(world.items[item]["name"], world.items[item]["price"])
+            print("#" * 30)
         # get and print actions from world
-        actions = world.get_actions()
+        actions = context.actions(world)
         print(0, "Quit game")
         print(1, "Check inventory")
         for i, (verb, target) in enumerate(actions, 2):

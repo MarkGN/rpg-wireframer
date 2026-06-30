@@ -4,5 +4,6 @@ description: Charlie is a big, strong man with a beard.
 portrait: null
 money: 50
 inventory:
+  - lantern
   - sword
 location: red-armory
