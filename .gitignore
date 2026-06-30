@@ -5,3 +5,4 @@ dev-scratchpad.md
 tests/__pycache__/*.pyc
 debug/engine.pyi/runners/engine.pyi
 runners/contexts/__pycache__/*.pyc
+games/local/*

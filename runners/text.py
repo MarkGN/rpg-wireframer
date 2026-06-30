@@ -3,6 +3,8 @@ from .contexts.dialogue import Dialogue
 from .contexts.explore import Explore
 from .contexts.shop import Shop
 from .world import World
+from pathlib import Path
+from sys import argv
 
 num_universal_actions = 2
 
@@ -21,7 +23,8 @@ def verb_char_to_english(verb):
 
 
 def main() -> None:
-    world = World()
+    game_dir = argv[1]
+    world = World(Path(f"games/{game_dir}"))
 
     while True:
         # get and print context from world

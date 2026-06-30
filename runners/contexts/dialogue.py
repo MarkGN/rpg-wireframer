@@ -8,8 +8,9 @@ from inkpython import Story
 import json
 from pathlib import Path
 import subprocess
+from sys import argv
 
-DIALOGUE_DIR: str = Path("dialogue")
+DIALOGUE_DIR: str = "games" / (argv[1] / Path("dialogue"))
 NPC_KEYWORDS = {
     "name",
     "description",
@@ -49,6 +50,7 @@ class Dialogue(Context):
         """
         meta = world.npcs.get(self.npc, {})
         json_path = ink_json_path(meta.get("dialogue", f"{self.npc}.ink"))
+        print("zing",meta.get("dialogue", f"{self.npc}.ink"), meta, DIALOGUE_DIR, argv)
         if json_path is None:
             print(f"(No dialogue available for {meta.get('name', self.npc)}.)\n")
             return

@@ -1,45 +1,5 @@
 """
 runner_text.py — text-mode runner for the RPG wireframe engine.
-
-World layout expected:
-    world/
-        pc.yaml
-        flags.yaml          (optional)
-        rooms/              *.yaml
-        npcs/               *.yaml
-        items/              *.yaml  (optional, for room item definitions)
-    dialogue/               *.ink   (compiled to *.ink.json by inklecate)
-
-Each room yaml:
-    name: The Rusty Flagon
-    description: A dimly lit tavern.
-    exits:
-        north: back_alley
-        south: market_square
-    items:
-        - old_lamp
-    npcs:               # static residents; events can add/remove at runtime
-        - innkeeper
-
-Each NPC yaml (flat; unknown fields become world_state variables):
-    name: Dave
-    description: Dave is a handsome guy.
-    portrait: null          # ignored in text mode
-    location: red-town      # starting room key
-    dialogue: dave.ink      # relative to dialogue/
-    accosts: false          # true → triggers immediately on room entry
-    hp: 3
-    damage: 1
-    money: 200
-    has_met_player: false
-
-pc.yaml:
-    name: Alex
-    location: tavern
-    stats:
-        money: 20
-    inventory:
-        - old_lamp
 """
 
 from __future__ import annotations
@@ -59,16 +19,6 @@ if TYPE_CHECKING:
     from context import Context
 
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
-
-WORLD_DIR: str = Path("world")
-ROOMS_DIR: str = WORLD_DIR / "rooms"
-NPCS_DIR: str = WORLD_DIR / "npcs"
-ITEMS_DIR: str = WORLD_DIR / "items"
-PC_FILE: str = WORLD_DIR / "pc.yaml"
-FLAGS_FILE: str = WORLD_DIR / "flags.yaml"
 
 # Fields that are engine keywords and should NOT be dumped into world_state.
 NPC_KEYWORDS = {
@@ -104,7 +54,14 @@ def load_yaml(path: Path) -> dict:
 # world_state["<npc_id>"] — per-NPC variables (hp, money, flags, …)
 # world_state["global"]  — room flags and anything not tied to an entity
 class World:
-    def __init__(self):
+    def __init__(self, game_path : Path):
+        world_dir = game_path / "world"
+        self.rooms_dir = world_dir / "rooms"
+        self.npcs_dir = world_dir / "npcs"
+        self.items_dir = world_dir / "items"
+        self.pc_file = world_dir / "pc.yaml"
+        self.flags_file = world_dir / "flags.yaml"
+
         self.world_state: dict[str, Any] = defaultdict(dict)
         self.flag: dict[str, Any] = defaultdict(dict)
         self.rooms: dict[str, dict] = {}  # room_id → room data
@@ -120,20 +77,20 @@ class World:
         """Load all yaml files."""
 
         # Rooms
-        for path in sorted(ROOMS_DIR.glob("*.yaml")):
+        for path in sorted(self.rooms_dir.glob("*.yaml")):
             room_id = path.stem
             data = load_yaml(path)
             self.rooms[room_id] = data
             self.world_state["global"].setdefault(f"visited_{room_id}", False)
 
         # Items
-        for path in sorted(ITEMS_DIR.glob("*.yaml")):
+        for path in sorted(self.items_dir.glob("*.yaml")):
             item_id = path.stem
             data = load_yaml(path)
             self.items[item_id] = data
 
         # NPCs
-        for path in sorted(NPCS_DIR.glob("*.yaml")):
+        for path in sorted(self.npcs_dir.glob("*.yaml")):
             npc_id = path.stem
             data = load_yaml(path)
 
@@ -159,12 +116,12 @@ class World:
             self.world_state[npc_id] = state
 
         # Global flags
-        if FLAGS_FILE.exists():
-            self.flags = load_yaml(FLAGS_FILE)
+        if self.flags_file.exists():
+            self.flags = load_yaml(self.flags_file)
             self.world_state["global"].update(self.flags)
 
         # PC
-        pc_data = load_yaml(PC_FILE)
+        pc_data = load_yaml(self.pc_file)
         self.world_state["player"] = {
             "name": pc_data.get("name", "Player"),
             "inventory": list(pc_data.get("inventory", [])),
