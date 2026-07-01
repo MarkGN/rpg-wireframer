@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 # Fields that are engine keywords and should NOT be dumped into world_state.
-NPC_KEYWORDS = {
+NPC_KEYWORDS: set[str] = {
     "name",
     "description",
     "portrait",
@@ -55,15 +55,15 @@ def load_yaml(path: Path) -> dict:
 # world_state["global"]  — room flags and anything not tied to an entity
 class World:
     def __init__(self, game_path : Path):
-        world_dir = game_path / "world"
-        self.rooms_dir = world_dir / "rooms"
-        self.npcs_dir = world_dir / "npcs"
-        self.items_dir = world_dir / "items"
-        self.pc_file = world_dir / "pc.yaml"
-        self.flags_file = world_dir / "flags.yaml"
+        world_dir: Path = game_path / "world"
+        self.rooms_dir: Path = world_dir / "rooms"
+        self.npcs_dir: Path = world_dir / "npcs"
+        self.items_dir: Path = world_dir / "items"
+        self.pc_file: Path = world_dir / "pc.yaml"
+        self.flags_file: Path = world_dir / "flags.yaml"
 
         self.world_state: dict[str, Any] = defaultdict(dict)
-        self.flag: dict[str, Any] = defaultdict(dict)
+        self.flags: dict[str, Any] = defaultdict(dict)
         self.rooms: dict[str, dict] = {}  # room_id → room data
         self.items: dict[str, dict] = {}  # item_id  → item data
         self.npcs: dict[str, dict] = {}  # npc_id  → npc metadata
