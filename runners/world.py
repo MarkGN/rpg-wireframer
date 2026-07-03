@@ -83,6 +83,7 @@ class World:
 
             state.setdefault("accosts", False)
             state.setdefault("dialogue", f"{npc_id}.ink")
+            state.setdefault("is_visible", True)
 
             self.world_state[npc_id] = state
 
