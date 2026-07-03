@@ -1,7 +1,7 @@
-GAME ?= demos/toy
+GAME ?= games/demos/toy
 
 test:
-	PYTHONPATH=. python -m pytest
+	PYTHONPATH=. python -m pytest $(GAME)
 
 run:
 	PYTHONPATH=. python -m runners.text $(GAME)

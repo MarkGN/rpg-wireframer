@@ -24,7 +24,7 @@ def verb_char_to_english(verb):
 
 def main() -> None:
     game_dir = argv[1]
-    world = World(Path(f"games/{game_dir}"))
+    world = World(Path(f"{game_dir}"))
 
     while True:
         # get and print context from world
@@ -35,7 +35,7 @@ def main() -> None:
             print("#" * 30)
         if isinstance(context, Dialogue):
             print("#" * 30)
-            print(world.npcs.get(context.npc, None).get("name", None))
+            print(world.world_state.get(context.npc, None).get("name", None))
             print(context.last_text)
             print("#" * 30)
         if isinstance(context, Explore):

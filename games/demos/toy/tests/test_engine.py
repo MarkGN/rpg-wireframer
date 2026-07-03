@@ -1,8 +1,11 @@
+from pathlib import Path
+from sys import argv
 from runners.world import World
 
 
 def test_world_loads():
-    world = World()
+    game_dir = argv[1]
+    world = World(Path(f"{game_dir}"))
     world.load_world()
 
     assert world.current_room is not None
@@ -11,7 +14,8 @@ def test_world_loads():
 
 
 def test_player_can_pick_up_sword():
-    world = World()
+    game_dir = argv[1]
+    world = World(Path(f"{game_dir}"))
     world.load_world()
 
     # Whatever your inventory representation is.
@@ -29,3 +33,22 @@ def test_player_can_pick_up_sword():
         world.handle_action(verb, target)
 
     assert "sword" in world.world_state["player"]["inventory"]
+
+
+def test_eve_blocks():
+    
+    game_dir = argv[1]
+    world = World(Path(f"{game_dir}"))
+    world.load_world()
+
+    
+    actions = [
+        ("g", "Eve's house"),
+        ("c", "Fine."),
+        ('c', 'end dialogue'),
+    ]
+    for verb, target in actions:
+        world.handle_action(verb, target)
+    assert world.current_room == "red_town"
+    world.handle_action("g", "Blacksmith")
+    assert world.current_room == "red_smith"

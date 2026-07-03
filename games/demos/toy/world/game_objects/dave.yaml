@@ -2,5 +2,5 @@ name: Dave
 description: Dave is a handsome guy.
 portrait: null
 money: 200
-location: red-town
-has-met-player: False
+location: red_town
+has_met_player: False

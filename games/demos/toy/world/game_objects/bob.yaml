@@ -6,5 +6,5 @@ inventory:
   - sword
 money: 10
 location: field
-is-hostile: True
-num-encounters: 0
+is_hostile: True
+num_encounters: 0

@@ -19,22 +19,6 @@ if TYPE_CHECKING:
     from context import Context
 
 
-# Fields that are engine keywords and should NOT be dumped into world_state.
-NPC_KEYWORDS: set[str] = {
-    "name",
-    "description",
-    "portrait",
-    "location",
-    "locations",
-    "dialogue",
-    "accosts",
-    "guards-exits",
-    "guards-items",
-    "interact-prompt",
-    "inventory",
-}
-
-
 # ---------------------------------------------------------------------------
 # Loader
 # ---------------------------------------------------------------------------
@@ -66,7 +50,6 @@ class World:
         self.flags: dict[str, Any] = defaultdict(dict)
         self.rooms: dict[str, dict] = {}  # room_id → room data
         self.items: dict[str, dict] = {}  # item_id  → item data
-        self.npcs: dict[str, dict] = {}  # npc_id  → npc metadata
         self.context_stack: list[Context] = []
         self.context_factory: ContextFactory = None
         self.current_room: str = None
@@ -79,6 +62,7 @@ class World:
         for path in sorted(self.rooms_dir.glob("*.yaml")):
             room_id = path.stem
             data = load_yaml(path)
+            data.setdefault("items", [])
             self.rooms[room_id] = data
 
         # Items
@@ -89,28 +73,17 @@ class World:
 
         # NPCs
         for path in sorted(self.game_objects_dir.glob("*.yaml")):
+            print("path", path)
             npc_id = path.stem
             data = load_yaml(path)
 
-            # Split keywords from game-specific variables.
-            meta: dict = {}
             state: dict = {}
             for key, value in data.items():
-                if key in NPC_KEYWORDS:
-                    meta[key] = value
-                else:
-                    state[key] = value
+                state[key] = value
 
-            # Normalise locations: accept either `location: x` or `locations: [x, y]`
-            if "location" in meta and "locations" not in meta:
-                meta["locations"] = [meta.pop("location")]
-            elif "locations" not in meta:
-                meta["locations"] = []
+            state.setdefault("accosts", False)
+            state.setdefault("dialogue", f"{npc_id}.ink")
 
-            meta.setdefault("accosts", False)
-            meta.setdefault("dialogue", f"{npc_id}.ink")
-
-            self.npcs[npc_id] = meta
             self.world_state[npc_id] = state
 
         # Global flags
@@ -135,14 +108,14 @@ class World:
 
     def get_state(self, key):
         terms = key.split(".")
-        value = self.npcs if terms[-1] in NPC_KEYWORDS else self.world_state
+        value = self.world_state
         for term in terms:
             value = value[term]
         return value
 
     def set_state(self, key, value):
         terms = key.split(".")
-        d = self.npcs if terms[-1] in NPC_KEYWORDS else self.world_state
+        d = self.world_state
         for term in terms[:-1]:
             d = d[term]
         d[terms[-1]] = value
@@ -157,8 +130,8 @@ class World:
     def npcs_in_room(self) -> list[str]:
         """Return npc_ids whose current location includes this room."""
         present = []
-        for npc_id, meta in self.npcs.items():
-            if self.current_room in meta["locations"]:
+        for npc_id, meta in self.world_state.items():
+            if self.current_room in meta.get("location",""):
                 present.append(npc_id)
         return present
 
@@ -176,15 +149,15 @@ class World:
     def check_accost(self) -> str | None:
         """Return the first accosting NPC in this room, if any."""
         for npc_id in self.npcs_in_room():
-            if self.npcs[npc_id].get("accosts", False):
+            if self.world_state[npc_id].get("accosts", False):
                 return npc_id
         return None
 
     def check_block(self, category, target) -> str | None:
         """Return the first accosting NPC, if any"""
         for npc_id in self.npcs_in_room():
-            guards = self.npcs[npc_id].get("guards-" + category, {})
-            if target in guards:
+            guards = self.world_state[npc_id].get("guards_" + category, {})
+            if target in [self.rooms[g]["name"] for g in guards]:
                 return npc_id
         return None
 

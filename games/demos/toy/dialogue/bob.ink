@@ -1,6 +1,6 @@
 INCLUDE globals.ink
 
-{get("bob.is-hostile"):
+{get("bob.is_hostile"):
   -> challenge
 - else:
   -> greeting
@@ -11,8 +11,8 @@ You actually seem like a decent guy.
 -> END
 
 === challenge
-~ increase("bob.num-encounters",1)
-{get("bob.num-encounters"):
+~ increase("bob.num_encounters",1)
+{get("bob.num_encounters"):
 - 1:
 Ho there! Your money or your life!
 + Take my money. -> surrender
@@ -23,7 +23,7 @@ You again! You won't escape me so easily this time! En garde!
 - else:
 Jeez. You are actually really fast.
 You know what? I've got enough cardio for today. You win. I'm not going to rob you.
-~ set("bob.is-hostile", false)
+~ set("bob.is_hostile", false)
 -> END
 }
 
@@ -43,7 +43,7 @@ Huh. No-one ever says that. Sweet. -> lose
     (You take his {his_money} gold.)
     ~ increase("player.money", his_money)
 }
-~ set("bob.is-hostile", false)
+~ set("bob.is_hostile", false)
 ~ set("bob.accosts", 0)
 ~ move("bob", "red-town")
 # portrait: bob-sad
@@ -52,7 +52,7 @@ I'll go back to town. -> END
 
 
 === lose
-~ set("bob.is-hostile", false)
+~ set("bob.is_hostile", false)
 ~ temp your_money = get("player.money")
 {your_money > 0:
     [Bob takes your {your_money} gold.]

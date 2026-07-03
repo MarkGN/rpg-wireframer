@@ -10,18 +10,8 @@ from pathlib import Path
 import subprocess
 from sys import argv
 
-DIALOGUE_DIR: str = "games" / (argv[1] / Path("dialogue"))
-NPC_KEYWORDS = {
-    "name",
-    "description",
-    "portrait",
-    "location",
-    "locations",
-    "dialogue",
-    "accosts",
-    "guards-exits",
-    "guards-items",
-}
+print("argv debug", argv)
+DIALOGUE_DIR: str = (argv[1] / Path("dialogue"))
 TALK = "c"
 
 
@@ -33,6 +23,7 @@ class Dialogue(Context):
     def __init__(self, npc):
         self.npc: str = npc
         self.last_text: str = ""
+        self.story: Story = None
 
     def on_enter(self, world: World) -> None:
         """
@@ -48,7 +39,7 @@ class Dialogue(Context):
             move(npc, location)
             shop(inventory)
         """
-        meta = world.npcs.get(self.npc, {})
+        meta = world.world_state.get(self.npc, {})
         json_path = ink_json_path(meta.get("dialogue", f"{self.npc}.ink"))
         if json_path is None:
             print(f"(No dialogue available for {meta.get('name', self.npc)}.)\n")
@@ -97,7 +88,7 @@ class Dialogue(Context):
             return npc in self.npcs_in_room()
 
         def ext_move_npc(npc, location):
-            world.npcs[npc]["locations"] = [location]
+            world.world_state[npc]["location"] = [location]
 
         def ext_shop(inventory_handle):
             world.push_context("shop", inventory_handle=inventory_handle)

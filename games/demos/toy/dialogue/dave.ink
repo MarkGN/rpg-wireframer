@@ -3,9 +3,9 @@ INCLUDE globals.ink
 === greeting
 
 Hello! I like you.
-{ not get("dave.has-met-player"):
+{ not get("dave.has_met_player"):
   ~ temp gift = 100
-  ~ set("dave.has-met-player", true)
+  ~ set("dave.has_met_player", true)
   Here, have {gift} gold.
   I'll see you around, mate.
   ~ increase("player.money", gift)

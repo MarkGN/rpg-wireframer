@@ -1,9 +1,8 @@
-room: red-town
 name: Red Town
 description: A small town with red buildings. There's a gate to the north leading to the fields, an armory in the east, and a wizard's tower in the west.
 exits: 
-  Blacksmith: red-armory
-  Eve's house: red-secret
+  Blacksmith: red_smith
+  Eve's house: eve_house
   Gate: field
-  Wizard's lab: red-wizard
+  Wizard's lab: alice_house
 items: []
