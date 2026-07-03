@@ -20,10 +20,10 @@ def test_player_can_pick_up_sword():
     actions = [
         ("t", "dave"),
         ("c", "-continue-"),
-        ('c', 'end dialogue'),
+        ("c", "end dialogue"),
         ("g", "Blacksmith"),
         ("c", "Buy"),
-        ("b", "sword")
+        ("b", "sword"),
     ]
     for verb, target in actions:
         world.handle_action(verb, target)

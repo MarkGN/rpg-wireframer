@@ -50,7 +50,6 @@ class Dialogue(Context):
         """
         meta = world.npcs.get(self.npc, {})
         json_path = ink_json_path(meta.get("dialogue", f"{self.npc}.ink"))
-        print("zing",meta.get("dialogue", f"{self.npc}.ink"), meta, DIALOGUE_DIR, argv)
         if json_path is None:
             print(f"(No dialogue available for {meta.get('name', self.npc)}.)\n")
             return

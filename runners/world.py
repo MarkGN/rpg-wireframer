@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from context import Context
 
 
-
 # Fields that are engine keywords and should NOT be dumped into world_state.
 NPC_KEYWORDS: set[str] = {
     "name",
@@ -54,7 +53,7 @@ def load_yaml(path: Path) -> dict:
 # world_state["<npc_id>"] — per-NPC variables (hp, money, flags, …)
 # world_state["global"]  — room flags and anything not tied to an entity
 class World:
-    def __init__(self, game_path : Path):
+    def __init__(self, game_path: Path):
         world_dir: Path = game_path / "world"
         self.rooms_dir: Path = world_dir / "rooms"
         self.npcs_dir: Path = world_dir / "npcs"
