@@ -1,8 +1,8 @@
 .venv/*
-dialogue/*.ink.json
 runners/__pycache__/*
 dev-scratchpad.md
 tests/__pycache__/*.pyc
-debug/engine.pyi/runners/engine.pyi
+debug/*
 runners/contexts/__pycache__/*.pyc
 games/local/*
+games/demos/toy/dialogue/*.ink.json

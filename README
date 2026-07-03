@@ -62,7 +62,7 @@ To test:
 
 world/
   rooms/        // .yaml files
-  npcs/         // .yaml files
+  game_objects/ // .yaml files
   items/        // .yaml files
   pc.yaml
 dialogue/       // .ink files
@@ -78,19 +78,21 @@ runners/
 tests/
   engine/       // tests confirming the engine achieves expected state after given inputs
 
-# NPCs
+# GameObjects
 
-These should be YAML files. The following are keywords:
+These should be YAML files. They often are NPCs, but can equally be treasure chests, puzzles, or vehicles. Their defining feature is to be interactive with some dialogue or other script. The following are keywords:
 
 accosts = False: If True, they talk to you as soon as you enter an area. Useful for enemies or shopkeepers.
 guards-exits = []: A list of exits. If you try to use the exit, this NPC will accost you and prevent it. Useful for doorkeepers.
+description = "": A description. This is used in text mode only, not exported, but it's good practice to document.
 guards-items = []: A list of items. If you try to take the item, this NPC will accost you and prevent it.
 name = "": Their display name.
-description = "": A description. This is used in text mode only, not exported, but it's good practice to document.
-portrait = {filename without .yaml}.png: Their default portrait. Recommended to use filename-happy.png, etc.
-location: Where they spawn into the world. You can pass a list for characters that might want to be in multiple locations at once, eg generic shopkeepers or enemies where you can't be bothered spawning unique NPCs.
+interact_prompt = "Talk to": The word the text runner uses to indicate interacting with this. Use "Open" for a treasure chest, "Pick" for a fruit tree, or "Loot" for a corpse.
 inventory = []: A list of items. You might use inventory to store other game objects you might collect such as skills: you might not in your final game, but it can simplify your code for the wireframe.
+is_visible = True: Whether the GameObject is visible. Set this to False and `accosts` to True to model a cutscene.
+location: Where they spawn into the world. You can pass a list for characters that might want to be in multiple locations at once, eg generic shopkeepers or enemies where you can't be bothered spawning unique NPCs.
 money = 0.
+portrait = {filename without .yaml}.png: Their default portrait. Recommended to use filename-happy.png, etc.
 
 Additionally, you can set whatever other variables you might want to use in your game, such as hp, gold, inventory, etc, using the same syntax.
 

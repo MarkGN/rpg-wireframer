@@ -30,6 +30,7 @@ NPC_KEYWORDS: set[str] = {
     "accosts",
     "guards-exits",
     "guards-items",
+    "interact-prompt",
     "inventory",
 }
 
@@ -56,7 +57,7 @@ class World:
     def __init__(self, game_path: Path):
         world_dir: Path = game_path / "world"
         self.rooms_dir: Path = world_dir / "rooms"
-        self.npcs_dir: Path = world_dir / "npcs"
+        self.game_objects_dir: Path = world_dir / "game_objects"
         self.items_dir: Path = world_dir / "items"
         self.pc_file: Path = world_dir / "pc.yaml"
         self.flags_file: Path = world_dir / "flags.yaml"
@@ -89,7 +90,7 @@ class World:
             self.items[item_id] = data
 
         # NPCs
-        for path in sorted(self.npcs_dir.glob("*.yaml")):
+        for path in sorted(self.game_objects_dir.glob("*.yaml")):
             npc_id = path.stem
             data = load_yaml(path)
 
