@@ -67,7 +67,6 @@ class World:
         self.rooms: dict[str, dict] = {}  # room_id → room data
         self.items: dict[str, dict] = {}  # item_id  → item data
         self.npcs: dict[str, dict] = {}  # npc_id  → npc metadata
-        self.visited: set[str] = set()  # room_ids the player has entered
         self.context_stack: list[Context] = []
         self.context_factory: ContextFactory = None
         self.current_room: str = None
@@ -81,7 +80,6 @@ class World:
             room_id = path.stem
             data = load_yaml(path)
             self.rooms[room_id] = data
-            self.world_state["global"].setdefault(f"visited_{room_id}", False)
 
         # Items
         for path in sorted(self.items_dir.glob("*.yaml")):
@@ -167,9 +165,6 @@ class World:
     def display_room(self) -> None:
         output = dict()
         room = self.rooms[self.current_room]
-        first_visit = output["first_visit"] = self.current_room not in self.visited
-        if first_visit:
-            self.visited.add(self.current_room)
         output["handle"] = self.current_room
         output["name"] = room.get("name", self.current_room)
         output["description"] = room.get("description", "")
