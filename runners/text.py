@@ -19,7 +19,7 @@ def verb_char_to_english(verb):
         "q": "",  # quit
         "t": "Talk to",
     }
-    return lookup.get(verb, ValueError(f"Unknown verb {verb}"))
+    return lookup.get(verb, verb)
 
 
 def main() -> None:

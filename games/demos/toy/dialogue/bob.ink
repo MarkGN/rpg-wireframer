@@ -32,7 +32,7 @@ You know what? I've got enough cardio for today. You win. I'm not going to rob y
 Huh. No-one ever says that. Sweet. -> lose
 
 === fight
-~ combat("Fight and win > win ; Fight and lose > lose ; Run away > flee") 
+~ scenario("duel") 
 -> END
 
 === win
@@ -45,7 +45,7 @@ Huh. No-one ever says that. Sweet. -> lose
 }
 ~ set("bob.is_hostile", false)
 ~ set("bob.accosts", 0)
-~ move("bob", "red-town")
+~ move("bob", "red_town")
 # portrait: bob-sad
 Okay, I give up. You win.
 I'll go back to town. -> END
@@ -62,7 +62,7 @@ I'll go back to town. -> END
     # portrait: bob-sad
     ... I sat around here for this long and you don't even have any money?! Ugh.
 }
-~ move("bob", "red-town")
+~ move("bob", "red_town")
 ~ set("bob.accosts", 0)
 Anyway, I'm going back to town. No hard feelings, yeah? -> END
 

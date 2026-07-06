@@ -7,5 +7,5 @@ Hello! Welcome to my smithy. I sell metal goods.
 + Goodbye -> END
 
 == buy
-~ shop("charlie.inventory")
+~ scenario("merchant")
 -> greeting

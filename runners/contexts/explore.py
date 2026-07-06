@@ -12,7 +12,7 @@ class Explore(Context):
 
     def actions(self, world):
         locs = [(GO, location) for location in world.rooms[world.current_room]["exits"]]
-        present_npcs = [(TALK, npc) for npc in world.npcs_in_room() if world.world_state[npc]["is_visible"]]
+        present_npcs = [(npc_data.get("interact_prompt", TALK), npc) for npc in world.npcs_in_room() for npc_data in (world.world_state[npc],) if (npc_data["is_visible"] and npc is not world.player_handle)]
         items = [(GET, item) for item in world.rooms[world.current_room]["items"]]
         options = locs + present_npcs + items
         return options

@@ -1,0 +1,4 @@
+name: Dark cave
+description: A dim cave. There's a chest hidden inside.
+exits: 
+  Field: field

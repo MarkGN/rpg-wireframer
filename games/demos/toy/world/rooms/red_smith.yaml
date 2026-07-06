@@ -1,5 +1,5 @@
 name: Charlie's Smithy
 description: A shop selling weapons.
 exits: 
-  Town: red-town
+  Town: red_town
 items: []

@@ -1,0 +1,6 @@
+context: combat
+enemies: [$self]
+outcomes:
+  - Fight and win: win
+  - Fight and lose: lose
+  - Run away: flee

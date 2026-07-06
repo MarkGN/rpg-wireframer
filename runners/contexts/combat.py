@@ -16,7 +16,9 @@ class Combat(Context):
     """
 
     def __init__(self, outcomes):
-        self.outcomes = self.parse_outcomes(outcomes)
+        self.outcomes = {}
+        for out in outcomes:
+            self.outcomes.update(out)
 
     def parse_outcomes(self, outcomes):
         half_parsed_outcomes = outcomes.split(";")
@@ -27,8 +29,8 @@ class Combat(Context):
         ]
 
     def actions(self, world: World):
-        return [(FIGHT, key) for (key, _) in self.outcomes]
+        return [(FIGHT, key) for key in self.outcomes.keys()]
 
     # This is why we have to assume this was called from a Dialogue
     def apply(self, _, target, world: World):
-        world.pop_context(goto=dict(self.outcomes)[target])
+        world.pop_context(goto=self.outcomes[target])

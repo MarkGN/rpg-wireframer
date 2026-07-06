@@ -14,6 +14,7 @@ import yaml
 from typing import TYPE_CHECKING
 
 from .factory import ContextFactory
+from .binder import Binder
 
 if TYPE_CHECKING:
     from context import Context
@@ -39,17 +40,19 @@ def load_yaml(path: Path) -> dict:
 # world_state["global"]  — room flags and anything not tied to an entity
 class World:
     def __init__(self, game_path: Path):
-        world_dir: Path = game_path / "world"
+        world_dir = game_path / "world"
         self.rooms_dir: Path = world_dir / "rooms"
         self.game_objects_dir: Path = world_dir / "game_objects"
         self.items_dir: Path = world_dir / "items"
-        self.pc_file: Path = world_dir / "pc.yaml"
+        self.game_file: Path = world_dir / "game.yaml"
         self.flags_file: Path = world_dir / "flags.yaml"
+        self.scenarios_file: Path = world_dir / "scenarios"
 
         self.world_state: dict[str, Any] = defaultdict(dict)
         self.flags: dict[str, Any] = defaultdict(dict)
         self.rooms: dict[str, dict] = {}  # room_id → room data
         self.items: dict[str, dict] = {}  # item_id  → item data
+        self.player_handle: str = ""
         self.context_stack: list[Context] = []
         self.context_factory: ContextFactory = None
         self.current_room: str = None
@@ -93,7 +96,9 @@ class World:
             self.world_state["global"].update(self.flags)
 
         # PC
-        pc_data = load_yaml(self.pc_file)
+        game_data = load_yaml(self.game_file)
+        self.player_handle = game_data["player"]
+        pc_data = load_yaml(self.game_objects_dir / f"{self.player_handle}.yaml")
         self.world_state["player"] = {
             "name": pc_data.get("name", "Player"),
             "inventory": list(pc_data.get("inventory", [])),
@@ -104,12 +109,13 @@ class World:
         if location not in self.rooms:
             sys.exit(f"Error: PC location '{location}' not found in world/rooms/.")
         self.context_factory = ContextFactory()
-        self.push_context("explore")
+        self.push_context(context="explore")
         self.current_room = location
 
     def get_state(self, key):
         terms = key.split(".")
         value = self.world_state
+        print(value, terms)
         for term in terms:
             value = value[term]
         return value
@@ -172,10 +178,14 @@ class World:
     def get_context(self) -> Context:
         return self.context_stack[-1]
 
-    def push_context(self, context: str, **kwargs) -> None:
-        ctx = self.context_factory.create(context, **kwargs)
+    def push_context(self, context: str, scenario = "None", npc=None) -> None:
+        ctx = self.context_factory.create(context, scenario, npc)
         self.context_stack.append(ctx)
         ctx.on_enter(self)
+
+    def push_scenario(self, script: str, npc: str) -> None:
+        scenario = load_yaml(self.scenarios_file / f"{script}.yaml")
+        self.push_context(scenario["context"], scenario, npc)
 
     def pop_context(self, **kwargs) -> Context:
         last = self.context_stack.pop()

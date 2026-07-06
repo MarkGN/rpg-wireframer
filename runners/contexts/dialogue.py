@@ -3,14 +3,14 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from world import World
-from ..context import Context
 from inkpython import Story
-import json
+import json, yaml
 from pathlib import Path
 import subprocess
 from sys import argv
+from ..binder import Binder
+from ..context import Context
 
-print("argv debug", argv)
 DIALOGUE_DIR: str = (argv[1] / Path("dialogue"))
 TALK = "c"
 
@@ -40,7 +40,7 @@ class Dialogue(Context):
             shop(inventory)
         """
         meta = world.world_state.get(self.npc, {})
-        json_path = ink_json_path(meta.get("dialogue", f"{self.npc}.ink"))
+        json_path = ink_json_path(meta.get("ink", f"{self.npc}")+".ink")
         if json_path is None:
             print(f"(No dialogue available for {meta.get('name', self.npc)}.)\n")
             return
@@ -54,10 +54,10 @@ class Dialogue(Context):
         # --- register external functions ---
 
         def ext_get(key):
-            return world.get_state(key)
+            return world.get_state(Binder({"player":world.player_handle, "self":self.npc}).apply(key))
 
         def ext_set(key, value):
-            world.set_state(key, value)
+            world.set_state((key), value)
 
         def ext_increase(key, value):
             terms = key.split(".")
@@ -90,12 +90,8 @@ class Dialogue(Context):
         def ext_move_npc(npc, location):
             world.world_state[npc]["location"] = [location]
 
-        def ext_shop(inventory_handle):
-            world.push_context("shop", inventory_handle=inventory_handle)
-            return
-
-        def ext_combat(outcomes_string):
-            world.push_context("combat", outcomes=outcomes_string)
+        def ext_scenario(script):
+            world.push_scenario(script=script, npc=self.npc)
             return
 
         self.story.BindExternalFunction("get", ext_get)
@@ -106,8 +102,7 @@ class Dialogue(Context):
         self.story.BindExternalFunction("has", ext_has_item)
         self.story.BindExternalFunction("move", ext_move_npc)
         self.story.BindExternalFunction("present", ext_at_npc)
-        self.story.BindExternalFunction("shop", ext_shop)
-        self.story.BindExternalFunction("combat", ext_combat)
+        self.story.BindExternalFunction("scenario", ext_scenario)
 
         self.step_story()
 
@@ -118,19 +113,17 @@ class Dialogue(Context):
     #     self.last_text = text
     #     return
 
-    def step_story(self) -> None:
-        text = ""
+    def step_story(self):
+        parts = []
 
         while self.story.canContinue:
             text = self.story.Continue()
-            if text is None:
-                return
-
-            text = text.strip()
             if text:
-                break
+                text = text.strip()
+                if text:
+                    parts.append(text)
 
-        self.last_text = text
+        self.last_text = "\n".join(parts)
 
     def actions(self, world: World):
         if self.story.canContinue:
