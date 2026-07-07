@@ -35,7 +35,11 @@ def main() -> None:
             print("#" * 30)
         if isinstance(context, Dialogue):
             print("#" * 30)
-            print(world.world_state["game_objects"].get(context.npc, None).get("name", None))
+            print(
+                world.world_state["game_objects"]
+                .get(context.npc, None)
+                .get("name", None)
+            )
             print(context.last_text)
             print("#" * 30)
         if isinstance(context, Explore):
@@ -48,7 +52,10 @@ def main() -> None:
             print("#" * 30)
             print(context.line)
             for item in context.inventory:
-                print(world.world_state["items"][item]["name"], world.world_state["items"][item]["price"])
+                print(
+                    world.world_state["items"][item]["name"],
+                    world.world_state["items"][item]["price"],
+                )
             print("#" * 30)
         # get and print actions from world
         actions = context.actions(world)

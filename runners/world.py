@@ -82,16 +82,11 @@ class World:
 
         # Quests
         for path in sorted(self.quests_dir.glob("*.yaml")):
-            quest_id = path.stem
             data = load_yaml(path)
 
             state: dict = {}
             for key, value in data.items():
                 state[key] = value
-
-            state.setdefault("accosts", False)
-            state.setdefault("dialogue", f"{npc_id}.ink")
-            state.setdefault("is_visible", True)
 
             self.world_state["quests"][npc_id] = state
 
@@ -142,7 +137,7 @@ class World:
         """Return npc_ids whose current location includes this room."""
         present = []
         for npc_id, meta in self.world_state["game_objects"].items():
-            if self.current_room in meta.get("location",""):
+            if self.current_room in meta.get("location", ""):
                 present.append(npc_id)
         return present
 
@@ -167,7 +162,9 @@ class World:
     def check_block(self, category, target) -> str | None:
         """Return the first accosting NPC, if any"""
         for npc_id in self.npcs_in_room():
-            guards = self.world_state["game_objects"][npc_id].get("guards_" + category, {})
+            guards = self.world_state["game_objects"][npc_id].get(
+                "guards_" + category, {}
+            )
             if target in [self.world_state["rooms"][g]["name"] for g in guards]:
                 return npc_id
         return None
@@ -182,7 +179,7 @@ class World:
     def get_context(self) -> Context:
         return self.context_stack[-1]
 
-    def push_context(self, context: str, scenario = "None", npc=None) -> None:
+    def push_context(self, context: str, scenario="None", npc=None) -> None:
         ctx = self.context_factory.create(context, scenario, npc)
         self.context_stack.append(ctx)
         ctx.on_enter(self)

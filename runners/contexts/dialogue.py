@@ -4,15 +4,16 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from world import World
 from inkpython import Story
-import json, yaml
+import json
 from pathlib import Path
 import subprocess
 from sys import argv
 from ..binder import Binder
 from ..context import Context
 
-DIALOGUE_DIR: str = (argv[1] / Path("dialogue"))
+DIALOGUE_DIR: str = argv[1] / Path("dialogue")
 TALK = "c"
+
 
 class Dialogue(Context):
     """
@@ -39,7 +40,7 @@ class Dialogue(Context):
             shop(inventory)
         """
         meta = world.world_state["game_objects"].get(self.npc, {})
-        json_path = ink_json_path(meta.get("ink", f"{self.npc}")+".ink")
+        json_path = ink_json_path(meta.get("ink", f"{self.npc}") + ".ink")
         if json_path is None:
             print(f"(No dialogue available for {meta.get('name', self.npc)}.)\n")
             return
@@ -50,9 +51,8 @@ class Dialogue(Context):
 
         self.story = Story(story_data)
 
-
         def binder(key):
-            return Binder({"player":world.player_handle, "self":self.npc}).apply(key)
+            return Binder({"player": world.player_handle, "self": self.npc}).apply(key)
 
         # --- register external functions ---
 

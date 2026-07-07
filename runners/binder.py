@@ -1,5 +1,5 @@
-
 from typing import Any
+
 
 def resolve_path(path):
     roots = {
@@ -15,6 +15,7 @@ def resolve_path(path):
         return path
     return f"game_objects.{path}"
 
+
 class Binder:
     def __init__(self, bindings):
         self.bindings = bindings
@@ -27,16 +28,10 @@ class Binder:
         """
 
         if isinstance(value, dict):
-            return {
-                key: self.apply(val, self.bindings)
-                for key, val in value.items()
-            }
+            return {key: self.apply(val, self.bindings) for key, val in value.items()}
 
         if isinstance(value, list):
-            return [
-                self.apply(item, self.bindings)
-                for item in value
-            ]
+            return [self.apply(item, self.bindings) for item in value]
 
         if isinstance(value, str):
             value = resolve_path(value)

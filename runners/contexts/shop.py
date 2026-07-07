@@ -23,7 +23,11 @@ class Shop(Context):
         self.line = "Welcome"
 
     def on_enter(self, world: World):
-        self.inventory = world.get_state(Binder({"player":world.player_handle, "self":self.npc}).apply(self.inventory_handle))
+        self.inventory = world.get_state(
+            Binder({"player": world.player_handle, "self": self.npc}).apply(
+                self.inventory_handle
+            )
+        )
 
     def actions(self, world: World):
         quit = [(QUIT, "Quit")]
