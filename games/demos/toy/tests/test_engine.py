@@ -52,3 +52,21 @@ def test_eve_blocks():
     assert world.current_room == "red_town"
     world.handle_action("g", "Blacksmith")
     assert world.current_room == "red_smith"
+
+def test_beat_bob():
+    
+    game_dir = argv[1]
+    world = World(Path(f"{game_dir}"))
+    world.load_world()
+
+    
+    actions = [
+        ("g", "Gate"),
+        ('c', 'Bring it on.'),
+        ('f', 'Fight and win'),
+         ('c', 'end dialogue')
+    ]
+    for verb, target in actions:
+        world.handle_action(verb, target)
+    assert world.world_state["game_objects"]["bob"]["money"] == 0
+    assert world.world_state["game_objects"]["zorro"]["money"] == 10

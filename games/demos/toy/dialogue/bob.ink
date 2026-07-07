@@ -41,7 +41,7 @@ Huh. No-one ever says that. Sweet. -> lose
 ~ temp his_money = get("bob.money")
 {his_money > 0:
     (You take his {his_money} gold.)
-    ~ increase("player.money", his_money)
+    ~ transfer("bob.money", "$player.money", his_money)
 }
 ~ set("bob.is_hostile", false)
 ~ set("bob.accosts", 0)
