@@ -34,7 +34,7 @@ class Shop(Context):
             world.pop_context()
         elif verb == BUY:
             money = world.get_state("player.money")
-            price = world.items[target]["price"]
+            price = world.world_state["items"][target]["price"]
             if money >= price:
                 world.set_state("player.money", money - price)
                 world.add_item("player.inventory", target)

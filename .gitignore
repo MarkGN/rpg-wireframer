@@ -6,3 +6,4 @@ debug/*
 runners/contexts/__pycache__/*.pyc
 games/local/*
 games/demos/toy/dialogue/*.ink.json
+games/demos/toy/tests/__pycache__/*

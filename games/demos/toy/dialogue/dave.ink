@@ -8,8 +8,7 @@ Hello! I like you.
   ~ set("dave.has_met_player", true)
   Here, have {gift} gold.
   I'll see you around, mate.
-  ~ increase("player.money", gift)
-  ~ increase("dave.money", -gift)
+  ~ transfer("dave.money", "player.money", gift)
   -> END
 - else:
   How's it going, mate? -> END

@@ -14,7 +14,6 @@ from ..context import Context
 DIALOGUE_DIR: str = (argv[1] / Path("dialogue"))
 TALK = "c"
 
-
 class Dialogue(Context):
     """
     Walking around the world map.
@@ -39,7 +38,7 @@ class Dialogue(Context):
             move(npc, location)
             shop(inventory)
         """
-        meta = world.world_state.get(self.npc, {})
+        meta = world.world_state["game_objects"].get(self.npc, {})
         json_path = ink_json_path(meta.get("ink", f"{self.npc}")+".ink")
         if json_path is None:
             print(f"(No dialogue available for {meta.get('name', self.npc)}.)\n")
@@ -51,33 +50,47 @@ class Dialogue(Context):
 
         self.story = Story(story_data)
 
+
+        def binder(key):
+            return Binder({"player":world.player_handle, "self":self.npc}).apply(key)
+
         # --- register external functions ---
 
         def ext_get(key):
-            return world.get_state(Binder({"player":world.player_handle, "self":self.npc}).apply(key))
+            return world.get_state(binder(key))
 
         def ext_set(key, value):
-            world.set_state((key), value)
+            world.set_state(binder(key), value)
 
         def ext_increase(key, value):
-            terms = key.split(".")
+            terms = binder(key).split(".")
             d = world.world_state
             for term in terms[:-1]:
                 d = d[term]
             d[terms[-1]] += value
 
+        def ext_transfer(d, r, value) -> None:
+            donor = binder(d)
+            recipient = binder(r)
+            if isinstance(value, list):
+                ext_remove_item(donor, value)
+                ext_add_item(recipient, value)
+            elif isinstance(value, int):
+                ext_increase(donor, -value)
+                ext_increase(recipient, value)
+
         def ext_has_item(key, item) -> int:
-            terms = key.split(".")
+            terms = binder(key).split(".")
             value = world.world_state
             for term in terms:
                 value = value[term]
             return item in value
 
         def ext_add_item(key, item):
-            world.add_item(key, item)
+            world.add_item(binder(key), item)
 
         def ext_remove_item(key, item):
-            terms = key.split(".")
+            terms = binder(key).split(".")
             d = world.world_state
             for term in terms[:-1]:
                 d = d[term]
@@ -85,10 +98,10 @@ class Dialogue(Context):
                 d[terms[-1]].remove(item)
 
         def ext_at_npc(npc):
-            return npc in self.npcs_in_room()
+            return npc in world.npcs_in_room()
 
         def ext_move_npc(npc, location):
-            world.world_state[npc]["location"] = [location]
+            world.world_state["game_objects"][npc]["location"] = [location]
 
         def ext_scenario(script):
             world.push_scenario(script=script, npc=self.npc)
@@ -97,6 +110,7 @@ class Dialogue(Context):
         self.story.BindExternalFunction("get", ext_get)
         self.story.BindExternalFunction("set", ext_set)
         self.story.BindExternalFunction("increase", ext_increase)
+        self.story.BindExternalFunction("transfer", ext_transfer)
         self.story.BindExternalFunction("add", ext_add_item)
         self.story.BindExternalFunction("remove", ext_remove_item)
         self.story.BindExternalFunction("has", ext_has_item)

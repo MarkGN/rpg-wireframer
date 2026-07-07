@@ -1,6 +1,19 @@
 
 from typing import Any
 
+def resolve_path(path):
+    roots = {
+        "player",
+        "rooms",
+        "items",
+        "quests",
+        "variables",
+        "game_objects",
+    }
+    first = path.split(".", 1)[0]
+    if first in roots:
+        return path
+    return f"game_objects.{path}"
 
 class Binder:
     def __init__(self, bindings):
@@ -26,6 +39,7 @@ class Binder:
             ]
 
         if isinstance(value, str):
+            value = resolve_path(value)
             for name, replacement in self.bindings.items():
                 value = value.replace(f"${name}", replacement)
             return value

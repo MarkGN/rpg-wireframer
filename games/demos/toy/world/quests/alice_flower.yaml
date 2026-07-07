@@ -1,0 +1,5 @@
+name: A flower for Alice
+stages:
+  0: Untaken
+  10: Commissioned
+  100: Complete

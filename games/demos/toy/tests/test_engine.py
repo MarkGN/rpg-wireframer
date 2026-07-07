@@ -9,8 +9,8 @@ def test_world_loads():
     world.load_world()
 
     assert world.current_room is not None
-    assert len(world.rooms) > 0
-    assert len(world.items) > 0
+    assert len(world.world_state["rooms"]) > 0
+    assert len(world.world_state["items"]) > 0
 
 
 def test_player_can_pick_up_sword():

@@ -1,20 +1,13 @@
-"""
-runner_text.py — text-mode runner for the RPG wireframe engine.
-"""
-
 from __future__ import annotations
 
 import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
-
 import yaml
-
 from typing import TYPE_CHECKING
 
 from .factory import ContextFactory
-from .binder import Binder
 
 if TYPE_CHECKING:
     from context import Context
@@ -46,12 +39,10 @@ class World:
         self.items_dir: Path = world_dir / "items"
         self.game_file: Path = world_dir / "game.yaml"
         self.flags_file: Path = world_dir / "flags.yaml"
+        self.quests_dir: Path = world_dir / "quests.yaml"
         self.scenarios_file: Path = world_dir / "scenarios"
 
         self.world_state: dict[str, Any] = defaultdict(dict)
-        self.flags: dict[str, Any] = defaultdict(dict)
-        self.rooms: dict[str, dict] = {}  # room_id → room data
-        self.items: dict[str, dict] = {}  # item_id  → item data
         self.player_handle: str = ""
         self.context_stack: list[Context] = []
         self.context_factory: ContextFactory = None
@@ -66,17 +57,16 @@ class World:
             room_id = path.stem
             data = load_yaml(path)
             data.setdefault("items", [])
-            self.rooms[room_id] = data
+            self.world_state["rooms"][room_id] = data
 
         # Items
         for path in sorted(self.items_dir.glob("*.yaml")):
             item_id = path.stem
             data = load_yaml(path)
-            self.items[item_id] = data
+            self.world_state["items"][item_id] = data
 
-        # NPCs
+        # Game Objects such as NPCs
         for path in sorted(self.game_objects_dir.glob("*.yaml")):
-            print("path", path)
             npc_id = path.stem
             data = load_yaml(path)
 
@@ -88,7 +78,22 @@ class World:
             state.setdefault("dialogue", f"{npc_id}.ink")
             state.setdefault("is_visible", True)
 
-            self.world_state[npc_id] = state
+            self.world_state["game_objects"][npc_id] = state
+
+        # Quests
+        for path in sorted(self.quests_dir.glob("*.yaml")):
+            quest_id = path.stem
+            data = load_yaml(path)
+
+            state: dict = {}
+            for key, value in data.items():
+                state[key] = value
+
+            state.setdefault("accosts", False)
+            state.setdefault("dialogue", f"{npc_id}.ink")
+            state.setdefault("is_visible", True)
+
+            self.world_state["quests"][npc_id] = state
 
         # Global flags
         if self.flags_file.exists():
@@ -106,7 +111,7 @@ class World:
         }
 
         location = pc_data.get("location")
-        if location not in self.rooms:
+        if location not in self.world_state["rooms"]:
             sys.exit(f"Error: PC location '{location}' not found in world/rooms/.")
         self.context_factory = ContextFactory()
         self.push_context(context="explore")
@@ -136,14 +141,14 @@ class World:
     def npcs_in_room(self) -> list[str]:
         """Return npc_ids whose current location includes this room."""
         present = []
-        for npc_id, meta in self.world_state.items():
+        for npc_id, meta in self.world_state["game_objects"].items():
             if self.current_room in meta.get("location",""):
                 present.append(npc_id)
         return present
 
     def display_room(self) -> None:
         output = dict()
-        room = self.rooms[self.current_room]
+        room = self.world_state["rooms"][self.current_room]
         output["handle"] = self.current_room
         output["name"] = room.get("name", self.current_room)
         output["description"] = room.get("description", "")
@@ -155,15 +160,15 @@ class World:
     def check_accost(self) -> str | None:
         """Return the first accosting NPC in this room, if any."""
         for npc_id in self.npcs_in_room():
-            if self.world_state[npc_id].get("accosts", False):
+            if self.world_state["game_objects"][npc_id].get("accosts", False):
                 return npc_id
         return None
 
     def check_block(self, category, target) -> str | None:
         """Return the first accosting NPC, if any"""
         for npc_id in self.npcs_in_room():
-            guards = self.world_state[npc_id].get("guards_" + category, {})
-            if target in [self.rooms[g]["name"] for g in guards]:
+            guards = self.world_state["game_objects"][npc_id].get("guards_" + category, {})
+            if target in [self.world_state["rooms"][g]["name"] for g in guards]:
                 return npc_id
         return None
 

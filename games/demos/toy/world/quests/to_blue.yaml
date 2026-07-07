@@ -1,0 +1,5 @@
+name: To Blue Town
+stages:
+  0: Untaken
+  10: Commissioned
+  100: Complete

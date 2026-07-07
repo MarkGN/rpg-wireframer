@@ -3,5 +3,4 @@ description: Hello, handsome!
 portrait: null
 inventory: []
 money: 0
-location: cave
-is_visible: false
+location: red_town
