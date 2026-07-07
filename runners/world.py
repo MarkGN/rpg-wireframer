@@ -115,7 +115,6 @@ class World:
     def get_state(self, key):
         terms = key.split(".")
         value = self.world_state
-        print(value, terms)
         for term in terms:
             value = value[term]
         return value

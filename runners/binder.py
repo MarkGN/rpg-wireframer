@@ -10,7 +10,7 @@ class Binder:
         """Recursively substitute $variables in strings.
         bindings is a dict like:
             {"self": "bob", "location": "town"}
-        All bindings begin with a $ char.
+        Convention: all bindings begin with a `$`.
         """
 
         if isinstance(value, dict):
