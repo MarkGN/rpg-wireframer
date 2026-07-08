@@ -2,4 +2,18 @@ name: A flower for Alice
 stages:
   0: Untaken
   10: Commissioned
+  20: Found flower
+  30: Collected flower
   100: Complete
+triggers:
+  - when:
+      stage: 10
+      event: enter_room
+      target: field
+    set_stage: 20
+
+  - when:
+      stage: 20
+      event: take_item
+      target: flower
+    set_stage: 30
