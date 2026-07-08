@@ -4,7 +4,7 @@ A tool for wireframing role-playing games.
 
 Wireframer is an engine-agnostic tool for script-first RPG design. With this, you can write locations, NPC dialogue, interactive items, and relationships between all these; test everything works as intended; and then export to a format ready to be used directly with the game engine and assets. It's designed for iterative development: if you change your mind during level-building, it's easy to edit the game's script within Wireframer. For example, if during development you change your mind between a 2D side-scroller and top-down 2D, the same scripts should work for both, the changes necessary should all relate to the engine and visual assets.
 
-The point is to a) force you to plan your scenario before charging in drawing maps, b) separate content and presentation and make it easier to develop, c) play your narrative graph to test that it works as intended, d) re-test it when you decide to change it, e) give an indication of the aesthetic feel of how art assets fit together.
+The point is to a) force you to plan your scenario before charging in drawing maps, b) separate content and presentation and make it easier to develop, c) play your narrative graph to test that it works as intended, d) use automated tools to check for correctness and find common bugs, e) re-test it when you decide to change it, f) give an indication of the aesthetic feel of how art assets fit together.
 
 # Installation
 
@@ -29,52 +29,56 @@ To test:
 `python -m pytest`
 
 # Directory structure
-.
-├── assets
-│   ├── maps
-│   ├── portraits
-│   └── sprites
-├── debug
-│   └── engine.pyi
-├── dev-scratchpad.md
-├── dialogue
-│   ├── alice.ink
-│   ├── bob.ink
-│   ├── charlie.ink
-│   ├── dave.ink
-│   ├── eve.ink
-│   └── globals.ink
+├── games
+│   ├── demos
+│   │   └── toy
+│   │       ├── assets
+│   │       │   ├── maps
+│   │       │   ├── portraits
+│   │       │   └── sprites
+│   │       ├── dialogue
+│   │       ├── tests
+│   │       └── world
+│   │           ├── game_objects
+│   │           ├── game.yaml
+│   │           ├── items
+│   │           ├── quests
+│   │           ├── rooms
+│   │           └── scenarios
+│   └── local
 ├── Makefile
 ├── README
-├── runners
-│   ├── context.py
-│   ├── contexts
-│   ├── factory.py
-│   ├── text.py
-│   └── world.py
-├── tests
-│   └── test_engine.py
-└── world
-    ├── items
-    ├── npcs
-    ├── pc.yaml
-    └── rooms
+└── runners
+    ├── binder.py
+    ├── context.py
+    ├── contexts
+    │   ├── combat.py
+    │   ├── dialogue.py
+    │   ├── explore.py
+    │   └── shop.py
+    ├── factory.py
+    ├── __init__.py
+    ├── text.py
+    └── world.py
 
 world/
-  rooms/        // .yaml files
-  game_objects/ // .yaml files
   items/        // .yaml files
-  pc.yaml
+  game_objects/ // .yaml files
+  quests/        // .yaml files
+  rooms/        // .yaml files
+  scenarios/        // .yaml files
+  game.yaml
 dialogue/       // .ink files
 assets/
   portraits/    // .png or other image files
   maps/         // .png or other image files
   sprites/      // .png or other image files
 runners/
-  world.py      // provides core step-through logic
+  binder.py     // tools for binding variables to .ink and .yaml files
   contexts/     // provides various game contexts: explore, dialogue, shop, combat
+  factory.py    // constructs game contexts
   text.py       // provides a text-only interface to engine.py
-  visual.py     // provides a richer visual interface to engine.py
+  world.py      // provides core step-through logic
 tests/
   engine/       // tests confirming the engine achieves expected state after given inputs
 
@@ -94,7 +98,7 @@ location: Where they spawn into the world. You can pass a list for characters th
 money = 0.
 portrait = {filename without .yaml}.png: Their default portrait. Recommended to use filename-happy.png, etc.
 
-Additionally, you can set whatever other variables you might want to use in your game, such as hp, gold, inventory, etc, using the same syntax.
+Additionally, you can set whatever other variables you might want to use in your game, such as hp, has_met_player, etc, using the same syntax.
 
 ## PC
 
