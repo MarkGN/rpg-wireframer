@@ -7,11 +7,9 @@ from inkpython import Story
 import json
 from pathlib import Path
 import subprocess
-from sys import argv
 from ..binder import Binder
 from ..context import Context
 
-DIALOGUE_DIR: str = argv[1] / Path("dialogue")
 TALK = "c"
 
 
@@ -40,7 +38,10 @@ class Dialogue(Context):
             shop(inventory)
         """
         meta = world.world_state["game_objects"].get(self.npc, {})
-        json_path = ink_json_path(meta.get("ink", f"{self.npc}") + ".ink")
+        dialogue_dir = Path(world.game_path) / "dialogue"
+        json_path = ink_json_path(
+            meta.get("ink", f"{self.npc}") + ".ink", dialogue_dir
+        )
         if json_path is None:
             print(f"(No dialogue available for {meta.get('name', self.npc)}.)\n")
             return
@@ -174,9 +175,9 @@ class Dialogue(Context):
 # ---------------------------------------------------------------------------
 
 
-def ink_json_path(ink_filename: str) -> Path | None:
+def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
     """Return path to compiled .ink.json, compiling with inklecate if needed."""
-    ink_path = DIALOGUE_DIR / ink_filename
+    ink_path = dialogue_dir / ink_filename
     json_path = ink_path.with_suffix(".ink.json")
 
     if not ink_path.exists():

@@ -6,7 +6,7 @@ from .world import World
 from pathlib import Path
 from sys import argv
 
-num_universal_actions = 2
+num_universal_actions = 3
 
 
 def verb_char_to_english(verb):
@@ -61,6 +61,7 @@ def main() -> None:
         actions = context.actions(world)
         print(0, "Quit game")
         print(1, "Check inventory")
+        print(2, "Check quest log")
         for i, (verb, target) in enumerate(actions, num_universal_actions):
             print(i, verb_char_to_english(verb), target)
         # elicit choice
@@ -73,9 +74,18 @@ def main() -> None:
             for item in world.world_state["player"]["inventory"]:
                 print(item)
             continue
+        elif choice == "2":
+            entries = world.get_quest_log_entries()
+            if not entries:
+                print("No active quests.")
+            else:
+                for entry in entries:
+                    status = "complete" if entry["complete"] else "in progress"
+                    print(f"{entry['name']}: stage {entry['stage']} ({status})")
+            continue
         else:
             raw = (
-                actions[int(choice) - 2]
+                actions[int(choice) - num_universal_actions]
                 if (
                     choice.isdigit()
                     and 0 <= int(choice) - num_universal_actions <= len(actions)

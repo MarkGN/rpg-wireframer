@@ -1,10 +1,22 @@
 from pathlib import Path
-from sys import argv
+import sys
+
+
+def get_game_dir() -> str:
+    candidate = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else None
+    if candidate and (candidate / "world").exists():
+        return str(candidate)
+    return str(Path(__file__).resolve().parents[1])
+
+
+if len(sys.argv) <= 1:
+    sys.argv = [sys.argv[0], get_game_dir()]
+
 from runners.world import World
 
 
 def test_world_loads():
-    game_dir = argv[1]
+    game_dir = get_game_dir()
     world = World(Path(f"{game_dir}"))
     world.load_world()
 
@@ -14,7 +26,7 @@ def test_world_loads():
 
 
 def test_player_can_pick_up_sword():
-    game_dir = argv[1]
+    game_dir = get_game_dir()
     world = World(Path(f"{game_dir}"))
     world.load_world()
 
@@ -37,7 +49,7 @@ def test_player_can_pick_up_sword():
 
 def test_eve_blocks():
 
-    game_dir = argv[1]
+    game_dir = get_game_dir()
     world = World(Path(f"{game_dir}"))
     world.load_world()
 
@@ -55,7 +67,7 @@ def test_eve_blocks():
 
 def test_beat_bob():
 
-    game_dir = argv[1]
+    game_dir = get_game_dir()
     world = World(Path(f"{game_dir}"))
     world.load_world()
 
@@ -72,7 +84,7 @@ def test_beat_bob():
 
 
 def test_quests_load():
-    game_dir = argv[1]
+    game_dir = get_game_dir()
     world = World(Path(f"{game_dir}"))
 
     assert "alice_flower" in world.world_state["quests"]
@@ -81,7 +93,7 @@ def test_quests_load():
 
 
 def test_alice_flower_quest_triggers():
-    game_dir = argv[1]
+    game_dir = get_game_dir()
     world = World(Path(f"{game_dir}"))
 
     world.set_state("quests.alice_flower.stage", 10)
@@ -93,3 +105,17 @@ def test_alice_flower_quest_triggers():
     world.handle_action("a", "flower")
     assert "flower" in world.world_state["player"]["inventory"]
     assert world.world_state["quests"]["alice_flower"]["stage"] == 30
+
+
+def test_active_quest_log_lists_only_nonzero_stages():
+    game_dir = get_game_dir()
+    world = World(Path(f"{game_dir}"))
+
+    world.set_state("quests.alice_flower.stage", 10)
+
+    entries = world.get_quest_log_entries()
+
+    assert len(entries) == 1
+    assert entries[0]["name"] == "A flower for Alice"
+    assert entries[0]["stage"] == 10
+    assert entries[0]["complete"] is False

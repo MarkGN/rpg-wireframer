@@ -33,6 +33,7 @@ def load_yaml(path: Path) -> dict:
 # world_state["global"]  — room flags and anything not tied to an entity
 class World:
     def __init__(self, game_path: Path):
+        self.game_path = game_path
         world_dir = game_path / "world"
         self.rooms_dir: Path = world_dir / "rooms"
         self.game_objects_dir: Path = world_dir / "game_objects"
@@ -190,6 +191,25 @@ class World:
     def get_actions(self) -> list[tuple[str, str]]:
         """Return a list of valid actions."""
         return self.get_context().actions(self)
+
+    def get_quest_log_entries(self) -> list[dict[str, Any]]:
+        """Return active quests with their current stage and completion state."""
+        entries = []
+        for quest_id, quest in self.world_state.get("quests", {}).items():
+            stage = quest.get("stage", 0)
+            if stage == 0:
+                continue
+            stages = quest.get("stages", {})
+            complete = stage >= max(stages.keys(), default=0)
+            entries.append(
+                {
+                    "id": quest_id,
+                    "name": quest.get("name", quest_id),
+                    "stage": stage,
+                    "complete": complete,
+                }
+            )
+        return entries
 
     def handle_action(self, verb: str, target: str) -> None:
         self.get_context().apply(verb, target, self)
