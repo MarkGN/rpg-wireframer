@@ -69,3 +69,27 @@ def test_beat_bob():
         world.handle_action(verb, target)
     assert world.world_state["game_objects"]["bob"]["money"] == 0
     assert world.world_state["game_objects"]["zorro"]["money"] == 10
+
+
+def test_quests_load():
+    game_dir = argv[1]
+    world = World(Path(f"{game_dir}"))
+
+    assert "alice_flower" in world.world_state["quests"]
+    assert world.world_state["quests"]["alice_flower"]["stage"] == 0
+    assert world.world_state["quests"]["alice_flower"]["name"] == "A flower for Alice"
+
+
+def test_alice_flower_quest_triggers():
+    game_dir = argv[1]
+    world = World(Path(f"{game_dir}"))
+
+    world.set_state("quests.alice_flower.stage", 10)
+    world.world_state["game_objects"]["bob"]["accosts"] = False
+    world.handle_action("g", "Gate")
+    assert world.current_room == "field"
+    assert world.world_state["quests"]["alice_flower"]["stage"] == 20
+
+    world.handle_action("a", "flower")
+    assert "flower" in world.world_state["player"]["inventory"]
+    assert world.world_state["quests"]["alice_flower"]["stage"] == 30

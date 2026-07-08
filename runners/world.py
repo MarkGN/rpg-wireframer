@@ -39,7 +39,7 @@ class World:
         self.items_dir: Path = world_dir / "items"
         self.game_file: Path = world_dir / "game.yaml"
         self.flags_file: Path = world_dir / "flags.yaml"
-        self.quests_dir: Path = world_dir / "quests.yaml"
+        self.quests_dir: Path = world_dir / "quests"
         self.scenarios_file: Path = world_dir / "scenarios"
 
         self.world_state: dict[str, Any] = defaultdict(dict)
@@ -82,13 +82,15 @@ class World:
 
         # Quests
         for path in sorted(self.quests_dir.glob("*.yaml")):
+            quest_id = path.stem
             data = load_yaml(path)
 
             state: dict = {}
             for key, value in data.items():
                 state[key] = value
 
-            self.world_state["quests"][npc_id] = state
+            state.setdefault("stage", 0)
+            self.world_state["quests"][quest_id] = state
 
         # Global flags
         if self.flags_file.exists():
@@ -158,6 +160,22 @@ class World:
             if self.world_state["game_objects"][npc_id].get("accosts", False):
                 return npc_id
         return None
+
+    def check_quest_triggers(self, event: str, target: str) -> None:
+        """Advance quest stages when a trigger's conditions match."""
+        for quest in self.world_state["quests"].values():
+            current_stage = quest.get("stage", 0)
+            for trigger in quest.get("triggers", []):
+                when = trigger.get("when", {})
+                if when.get("stage") != current_stage:
+                    continue
+                if when.get("event") != event:
+                    continue
+                if when.get("target") != target:
+                    continue
+                set_stage = trigger.get("set_stage")
+                if set_stage is not None:
+                    quest["stage"] = set_stage
 
     def check_block(self, category, target) -> str | None:
         """Return the first accosting NPC, if any"""

@@ -41,6 +41,7 @@ class Explore(Context):
                 world.world_state["game_objects"][world.player_handle][
                     "location"
                 ] = world.current_room
+                world.check_quest_triggers("enter_room", world.current_room)
                 accosting = world.check_accost()
                 if accosting:
                     world.push_context("dialogue", npc=accosting)
@@ -60,5 +61,6 @@ class Explore(Context):
                     return
                 room_items.remove(target)
                 world.world_state["player"].setdefault("inventory", []).append(target)
+                world.check_quest_triggers("take_item", target)
         else:
             return ValueError(f"Invalid action: {verb} {target}")
