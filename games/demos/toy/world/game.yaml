@@ -1,2 +1,7 @@
 context: explore
 player: zorro
+settings:
+  context_independent_actions:
+    - quit
+    - inventory
+    - quest_log

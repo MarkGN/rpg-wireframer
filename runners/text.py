@@ -2,11 +2,13 @@ from .contexts.combat import Combat
 from .contexts.dialogue import Dialogue
 from .contexts.explore import Explore
 from .contexts.shop import Shop
+from .context_independent_actions import (
+    get_context_independent_actions,
+    handle_context_independent_action,
+)
 from .world import World
 from pathlib import Path
 from sys import argv
-
-num_universal_actions = 3
 
 
 def verb_char_to_english(verb):
@@ -59,36 +61,28 @@ def main() -> None:
             print("#" * 30)
         # get and print actions from world
         actions = context.actions(world)
-        print(0, "Quit game")
-        print(1, "Check inventory")
-        print(2, "Check quest log")
-        for i, (verb, target) in enumerate(actions, num_universal_actions):
+        context_independent_actions = get_context_independent_actions(world)
+        for index, action in enumerate(context_independent_actions):
+            print(index, action["label"])
+        for i, (verb, target) in enumerate(actions, len(context_independent_actions)):
             print(i, verb_char_to_english(verb), target)
         # elicit choice
         choice = input("  > ").strip()
-        if choice == "0":
-            print("Goodbye.")
-            return
-        elif choice == "1":
-            print(f'${world.world_state["player"]["money"]}')
-            for item in world.world_state["player"]["inventory"]:
-                print(item)
-            continue
-        elif choice == "2":
-            entries = world.get_quest_log_entries()
-            if not entries:
-                print("No active quests.")
-            else:
-                for entry in entries:
-                    status = "complete" if entry["complete"] else "in progress"
-                    print(f"{entry['name']}: stage {entry['stage']} ({status})")
-            continue
-        else:
+        if choice.isdigit():
+            choice_index = int(choice)
+            if 0 <= choice_index < len(context_independent_actions):
+                action_id = context_independent_actions[choice_index]["id"]
+                should_exit = handle_context_independent_action(world, action_id)
+                if should_exit:
+                    return
+                continue
+
             raw = (
-                actions[int(choice) - num_universal_actions]
+                actions[choice_index - len(context_independent_actions)]
                 if (
-                    choice.isdigit()
-                    and 0 <= int(choice) - num_universal_actions <= len(actions)
+                    0
+                    <= choice_index - len(context_independent_actions)
+                    < len(actions)
                 )
                 else None
             )

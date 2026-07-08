@@ -48,6 +48,7 @@ class World:
         self.context_stack: list[Context] = []
         self.context_factory: ContextFactory = None
         self.current_room: str = None
+        self.game_settings: dict[str, Any] = {}
         self.load_world()
 
     def load_world(self) -> None:
@@ -101,6 +102,7 @@ class World:
         # PC
         game_data = load_yaml(self.game_file)
         self.player_handle = game_data["player"]
+        self.game_settings = game_data.get("settings", {})
         pc_data = load_yaml(self.game_objects_dir / f"{self.player_handle}.yaml")
         self.world_state["player"] = {
             "name": pc_data.get("name", "Player"),

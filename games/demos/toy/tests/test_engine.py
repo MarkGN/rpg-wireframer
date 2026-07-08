@@ -1,6 +1,8 @@
 from pathlib import Path
 import sys
 
+from runners.context_independent_actions import get_context_independent_actions
+
 
 def get_game_dir() -> str:
     candidate = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else None
@@ -119,3 +121,14 @@ def test_active_quest_log_lists_only_nonzero_stages():
     assert entries[0]["name"] == "A flower for Alice"
     assert entries[0]["stage"] == 10
     assert entries[0]["complete"] is False
+
+
+def test_context_independent_actions_follow_game_config():
+    game_dir = get_game_dir()
+    world = World(Path(f"{game_dir}"))
+
+    world.game_settings["context_independent_actions"] = ["quit", "inventory"]
+
+    actions = get_context_independent_actions(world)
+
+    assert [action["id"] for action in actions] == ["quit", "inventory"]
