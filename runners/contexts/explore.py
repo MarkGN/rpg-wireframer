@@ -1,3 +1,4 @@
+from ..action import Action, InteractType
 from ..context import Context
 
 GET = "a"
@@ -12,24 +13,24 @@ class Explore(Context):
 
     def actions(self, world):
         locs = [
-            (GO, location)
+            Action(InteractType.GO_TO, location)
             for location in world.world_state["rooms"][world.current_room]["exits"]
         ]
         present_npcs = [
-            (npc_data.get("interact_prompt", TALK), npc)
+            Action(InteractType.TALK, npc)
             for npc in world.npcs_in_room()
             for npc_data in (world.world_state["game_objects"][npc],)
             if (npc_data["is_visible"] and npc != world.player_handle)
         ]
         items = [
-            (GET, item)
+            Action(InteractType.TAKE, item)
             for item in world.world_state["rooms"][world.current_room]["items"]
         ]
         options = locs + present_npcs + items
         return options
 
     def apply(self, verb, target, world):
-        if verb == GO:
+        if verb in {InteractType.GO_TO, GO}:
             # go to location
             exits = world.world_state["rooms"][world.current_room].get("exits", {})
             if target in exits:
@@ -48,10 +49,10 @@ class Explore(Context):
                     return
             else:
                 return ValueError(f"Invalid action: {verb} {target}")
-        elif verb == TALK:
+        elif verb in {InteractType.TALK, TALK}:
             # talk to npc
             world.push_context("dialogue", npc=target)
-        elif verb == GET:
+        elif verb in {InteractType.TAKE, GET}:
             # acquire item
             room_items = world.world_state["rooms"][world.current_room].get("items", [])
             if target in room_items:

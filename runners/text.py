@@ -1,3 +1,7 @@
+from pathlib import Path
+from sys import argv
+
+from .action import render_action
 from .contexts.combat import Combat
 from .contexts.dialogue import Dialogue
 from .contexts.explore import Explore
@@ -7,21 +11,6 @@ from .context_independent_actions import (
     handle_context_independent_action,
 )
 from .world import World
-from pathlib import Path
-from sys import argv
-
-
-def verb_char_to_english(verb):
-    lookup = {
-        "a": "Take",
-        "b": "Buy",
-        "c": "",  # chat
-        "f": "",  # fight
-        "g": "Go to",
-        "q": "",  # quit
-        "t": "Talk to",
-    }
-    return lookup.get(verb, verb)
 
 
 def main() -> None:
@@ -64,8 +53,8 @@ def main() -> None:
         context_independent_actions = get_context_independent_actions(world)
         for index, action in enumerate(context_independent_actions):
             print(index, action["label"])
-        for i, (verb, target) in enumerate(actions, len(context_independent_actions)):
-            print(i, verb_char_to_english(verb), target)
+        for i, action in enumerate(actions, len(context_independent_actions)):
+            print(i, render_action(world, action))
         # elicit choice
         choice = input("  > ").strip()
         if choice.isdigit():
@@ -86,9 +75,9 @@ def main() -> None:
                 continue
             # have world apply choice
             print("debug: your action was", raw)
-            world.handle_action(raw[0], raw[1])
-            if raw[0] == "a":
-                print(f"  You pick up the {raw[1]}.")
+            world.handle_action(raw.interact_type, raw.target)
+            if raw.interact_type == "a":
+                print(f"  You pick up the {raw.target}.")
 
 
 if __name__ == "__main__":

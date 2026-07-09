@@ -2,7 +2,7 @@ name: Treasure chest
 description: A classic wooden treasure chest.
 portrait: null
 ink: chest
-# interact_prompt: Open
+interact_prompt: Open
 loot: ruby
 open: false
 location: cave

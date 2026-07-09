@@ -337,7 +337,11 @@ class World:
             )
         return entries
 
-    def handle_action(self, verb: str, target: str) -> None:
+    def handle_action(self, verb: str | object, target: str | None = None) -> None:
+        if hasattr(verb, "interact_type") and hasattr(verb, "target"):
+            action = verb
+            self.get_context().apply(action.interact_type, action.target, self)
+            return
         self.get_context().apply(verb, target, self)
 
     def get_context(self) -> Context:

@@ -7,6 +7,7 @@ from inkpython import Story
 import json
 from pathlib import Path
 import subprocess
+from ..action import Action, InteractType
 from ..binder import Binder
 from ..context import Context
 
@@ -140,17 +141,22 @@ class Dialogue(Context):
 
     def actions(self, world: World):
         if self.story.canContinue:
-            return [(TALK, "-continue-")]
+            return [Action(InteractType.CONTINUE_TALK, "-continue-")]
         elif self.story.currentChoices:
-            return [(TALK, choice.text) for choice in self.story.currentChoices]
+            return [
+                Action(InteractType.CONTINUE_TALK, choice.text)
+                for choice in self.story.currentChoices
+            ]
         else:
-            return [(TALK, "end dialogue")]
+            return [Action(InteractType.END_DIALOGUE)]
 
     # With dialogues, the verb is always "keep talking"
     def apply(self, verb: str, target: str, world: World):
 
         self.last_text = ""
-        if self.story.canContinue:
+        if verb == InteractType.END_DIALOGUE:
+            world.pop_context()
+        elif self.story.canContinue:
             lines = []
             while self.story.canContinue:
                 lines.append(self.story.Continue().strip())

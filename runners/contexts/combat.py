@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from world import World
+from ..action import Action, InteractType
 from ..context import Context
 
 FIGHT = "f"
@@ -29,7 +30,7 @@ class Combat(Context):
         ]
 
     def actions(self, world: World):
-        return [(FIGHT, key) for key in self.outcomes.keys()]
+        return [Action(InteractType.FIGHT, key) for key in self.outcomes.keys()]
 
     # This is why we have to assume this was called from a Dialogue
     def apply(self, _, target, world: World):

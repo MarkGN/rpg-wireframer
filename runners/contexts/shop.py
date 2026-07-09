@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from ..action import Action, InteractType
 from ..binder import Binder
 
 if TYPE_CHECKING:
@@ -30,13 +31,13 @@ class Shop(Context):
         )
 
     def actions(self, world: World):
-        quit = [(QUIT, "Quit")]
-        return [(BUY, item) for item in self.inventory] + quit
+        quit = [Action(InteractType.QUIT, "Quit")]
+        return [Action(InteractType.BUY, item) for item in self.inventory] + quit
 
     def apply(self, verb, target, world: World):
-        if verb == QUIT:
+        if verb in {InteractType.QUIT, QUIT}:
             world.pop_context()
-        elif verb == BUY:
+        elif verb in {InteractType.BUY, BUY}:
             money = world.get_state("player.money")
             price = world.world_state["items"][target]["price"]
             if money >= price:
