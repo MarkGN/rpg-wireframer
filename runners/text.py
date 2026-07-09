@@ -79,11 +79,7 @@ def main() -> None:
 
             raw = (
                 actions[choice_index - len(context_independent_actions)]
-                if (
-                    0
-                    <= choice_index - len(context_independent_actions)
-                    < len(actions)
-                )
+                if (0 <= choice_index - len(context_independent_actions) < len(actions))
                 else None
             )
             if not raw:

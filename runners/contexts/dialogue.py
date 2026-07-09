@@ -39,9 +39,7 @@ class Dialogue(Context):
         """
         meta = world.world_state["game_objects"].get(self.npc, {})
         dialogue_dir = Path(world.game_path) / "dialogue"
-        json_path = ink_json_path(
-            meta.get("ink", f"{self.npc}") + ".ink", dialogue_dir
-        )
+        json_path = ink_json_path(meta.get("ink", f"{self.npc}") + ".ink", dialogue_dir)
         if json_path is None:
             print(f"(No dialogue available for {meta.get('name', self.npc)}.)\n")
             return

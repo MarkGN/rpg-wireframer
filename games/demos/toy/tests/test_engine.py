@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 
 from runners.context_independent_actions import get_context_independent_actions
+from runners.world import World
 
 
 def get_game_dir() -> str:
@@ -13,8 +14,6 @@ def get_game_dir() -> str:
 
 if len(sys.argv) <= 1:
     sys.argv = [sys.argv[0], get_game_dir()]
-
-from runners.world import World
 
 
 def test_world_loads():
