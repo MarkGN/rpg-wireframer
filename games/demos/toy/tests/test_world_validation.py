@@ -28,7 +28,9 @@ def test_validate_world_accepts_room_locations_and_exits(tmp_path: Path) -> None
         + "\n",
         encoding="utf-8",
     )
-    (world_dir / "game_objects" / "npc.yaml").write_text(
+    nested_dir = world_dir / "game_objects" / "nested"
+    nested_dir.mkdir(parents=True)
+    (nested_dir / "npc.yaml").write_text(
         textwrap.dedent(
             """
             name: NPC
@@ -40,7 +42,9 @@ def test_validate_world_accepts_room_locations_and_exits(tmp_path: Path) -> None
         + "\n",
         encoding="utf-8",
     )
-    (world_dir / "rooms" / "start.yaml").write_text(
+    nested_room_dir = world_dir / "rooms" / "nested"
+    nested_room_dir.mkdir(parents=True)
+    (nested_room_dir / "start.yaml").write_text(
         textwrap.dedent(
             """
             name: Start

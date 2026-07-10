@@ -32,7 +32,7 @@ def validate_world(game_path: Path | str) -> None:
     game_file = world_dir / "game.yaml"
 
     rooms: dict[str, dict[str, Any]] = {}
-    for path in sorted(rooms_dir.glob("*.yaml")):
+    for path in sorted(rooms_dir.rglob("*.yaml")):
         room_id = path.stem
         rooms[room_id] = load_yaml(path)
 
@@ -44,9 +44,15 @@ def validate_world(game_path: Path | str) -> None:
     if not player_handle:
         raise ValueError(f"No player defined in {game_file}")
 
-    player_path = game_objects_dir / f"{player_handle}.yaml"
-    if not player_path.exists():
-        raise ValueError(f"Player data not found at {player_path}")
+    player_path = None
+    for path in sorted(game_objects_dir.rglob("*.yaml")):
+        if path.stem == player_handle:
+            player_path = path
+            break
+    if player_path is None:
+        raise ValueError(
+            f"Player data not found for '{player_handle}' under {game_objects_dir}"
+        )
 
     player_data = load_yaml(player_path)
     start_room = player_data.get("location")
@@ -55,7 +61,7 @@ def validate_world(game_path: Path | str) -> None:
             f"Player location '{start_room}' is not a valid room in {rooms_dir}"
         )
 
-    for path in sorted(game_objects_dir.glob("*.yaml")):
+    for path in sorted(game_objects_dir.rglob("*.yaml")):
         object_data = load_yaml(path)
         location = object_data.get("location")
         if location is None:
@@ -174,20 +180,20 @@ class World:
         """Load all yaml files."""
 
         # Rooms
-        for path in sorted(self.rooms_dir.glob("*.yaml")):
+        for path in sorted(self.rooms_dir.rglob("*.yaml")):
             room_id = path.stem
             data = load_yaml(path)
             data.setdefault("items", [])
             self.world_state["rooms"][room_id] = data
 
         # Items
-        for path in sorted(self.items_dir.glob("*.yaml")):
+        for path in sorted(self.items_dir.rglob("*.yaml")):
             item_id = path.stem
             data = load_yaml(path)
             self.world_state["items"][item_id] = data
 
         # Game Objects such as NPCs
-        for path in sorted(self.game_objects_dir.glob("*.yaml")):
+        for path in sorted(self.game_objects_dir.rglob("*.yaml")):
             npc_id = path.stem
             data = load_yaml(path)
 
@@ -202,7 +208,7 @@ class World:
             self.world_state["game_objects"][npc_id] = state
 
         # Quests
-        for path in sorted(self.quests_dir.glob("*.yaml")):
+        for path in sorted(self.quests_dir.rglob("*.yaml")):
             quest_id = path.stem
             data = load_yaml(path)
 
@@ -222,7 +228,16 @@ class World:
         game_data = load_yaml(self.game_file)
         self.player_handle = game_data["player"]
         self.game_settings = game_data.get("settings", {})
-        pc_data = load_yaml(self.game_objects_dir / f"{self.player_handle}.yaml")
+        player_path = None
+        for path in sorted(self.game_objects_dir.rglob("*.yaml")):
+            if path.stem == self.player_handle:
+                player_path = path
+                break
+        if player_path is None:
+            sys.exit(
+                f"Error: player '{self.player_handle}' not found in world/game_objects/."
+            )
+        pc_data = load_yaml(player_path)
         self.world_state["player"] = {
             "name": pc_data.get("name", "Player"),
             "inventory": list(pc_data.get("inventory", [])),
