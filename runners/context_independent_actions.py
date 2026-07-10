@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-
+from .presentation import format_inventory, format_quest_log
 
 _DEFAULT_ACTIONS = ["quit", "inventory", "quest_log"]
 
@@ -30,19 +30,13 @@ def handle_context_independent_action(world: Any, action_id: str) -> bool:
         return True
 
     if action_id == "inventory":
-        print(f'${world.world_state["player"]["money"]}')
-        for item in world.world_state["player"]["inventory"]:
-            print(item)
+        for line in format_inventory(world):
+            print(line)
         return False
 
     if action_id == "quest_log":
-        entries = world.get_quest_log_entries()
-        if not entries:
-            print("No active quests.")
-        else:
-            for entry in entries:
-                status = "complete" if entry["complete"] else "in progress"
-                print(f"{entry['name']}: stage {entry['stage']} ({status})")
+        for line in format_quest_log(world):
+            print(line)
         return False
 
     return False

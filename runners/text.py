@@ -1,7 +1,6 @@
 from pathlib import Path
 from sys import argv
 
-from .action import render_action
 from .contexts.combat import Combat
 from .contexts.dialogue import Dialogue
 from .contexts.explore import Explore
@@ -9,6 +8,14 @@ from .contexts.shop import Shop
 from .context_independent_actions import (
     get_context_independent_actions,
     handle_context_independent_action,
+)
+from .presentation import (
+    format_actions,
+    format_combat_header,
+    format_context_independent_actions,
+    format_dialogue_header,
+    format_room_header,
+    format_shop_header,
 )
 from .world import World
 
@@ -21,40 +28,26 @@ def main() -> None:
         # get and print context from world
         context = world.get_context()
         if isinstance(context, Combat):
-            print("#" * 30)
-            print("You are in combat right now!")
-            print("#" * 30)
+            for line in format_combat_header():
+                print(line)
         if isinstance(context, Dialogue):
-            print("#" * 30)
-            print(
-                world.world_state["game_objects"]
-                .get(context.npc, None)
-                .get("name", None)
-            )
-            print(context.last_text)
-            print("#" * 30)
+            for line in format_dialogue_header(world, context):
+                print(line)
         if isinstance(context, Explore):
-            room = world.display_room()
-            print("#" * 30)
-            print(room.get("name", f'{room.get("handle")} name not found'))
-            print(room.get("description", None))
-            print("#" * 30)
+            for line in format_room_header(world, context):
+                print(line)
         elif isinstance(context, Shop):
-            print("#" * 30)
-            print(context.line)
-            for item in context.inventory:
-                print(
-                    world.world_state["items"][item]["name"],
-                    world.world_state["items"][item]["price"],
-                )
-            print("#" * 30)
+            for line in format_shop_header(world, context):
+                print(line)
         # get and print actions from world
         actions = context.actions(world)
         context_independent_actions = get_context_independent_actions(world)
-        for index, action in enumerate(context_independent_actions):
-            print(index, action["label"])
-        for i, action in enumerate(actions, len(context_independent_actions)):
-            print(i, render_action(world, action))
+        for index, label in format_context_independent_actions(
+            context_independent_actions
+        ):
+            print(index, label)
+        for index, label in format_actions(world, actions):
+            print(index + len(context_independent_actions), label)
         # elicit choice
         choice = input("  > ").strip()
         if choice.isdigit():
