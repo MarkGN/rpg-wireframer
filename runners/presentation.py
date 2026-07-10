@@ -5,7 +5,7 @@ from typing import Any
 from .action import Action, render_action
 
 
-def format_room_header(world: Any, context: Any) -> list[str]:
+def format_explore_header(world: Any, context: Any) -> list[str]:
     room = world.display_room()
     return [
         "#" * 30,

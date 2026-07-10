@@ -15,6 +15,9 @@ class InteractType(str, Enum):
     END_DIALOGUE = "end_dialogue"
 
 
+ADVERBIAL_PLACES = {"back", "around", "outside", "upstairs", "downstairs", "home"}
+
+
 class Action(tuple[InteractType, Any]):
     def __new__(cls, interact_type: InteractType, target: Any = None):
         return tuple.__new__(cls, (interact_type, target))
@@ -37,7 +40,11 @@ def render_action(world: Any, action: Action) -> str:
         prompt = room_meta.get("interact_prompt")
         if prompt:
             return f"{prompt} {room_meta.get('name', target)}"
-        return f"Go to {room_meta.get('name', target)}"
+        place = room_meta.get("name", target)
+        if place in ADVERBIAL_PLACES:
+            return f"Go {place}"
+        else:
+            return f"Go to {place}"
 
     if interact_type == InteractType.TALK:
         if isinstance(target, str):

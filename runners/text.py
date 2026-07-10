@@ -14,7 +14,7 @@ from .presentation import (
     format_combat_header,
     format_context_independent_actions,
     format_dialogue_header,
-    format_room_header,
+    format_explore_header,
     format_shop_header,
 )
 from .world import World
@@ -34,7 +34,7 @@ def main() -> None:
             for line in format_dialogue_header(world, context):
                 print(line)
         if isinstance(context, Explore):
-            for line in format_room_header(world, context):
+            for line in format_explore_header(world, context):
                 print(line)
         elif isinstance(context, Shop):
             for line in format_shop_header(world, context):
