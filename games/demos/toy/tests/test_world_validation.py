@@ -1,7 +1,7 @@
 from pathlib import Path
 import textwrap
 
-from runners.world import validate_world
+from validate.rooms import validate_world
 
 
 def test_validate_world_accepts_room_locations_and_exits(tmp_path: Path) -> None:

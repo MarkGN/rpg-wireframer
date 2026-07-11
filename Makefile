@@ -9,7 +9,7 @@ run:
 	PYTHONPATH=. python -m runners.text $(GAME)
 
 validate-rooms:
-	PYTHONPATH=. python -m runners.world validate-rooms $(GAME)
+	PYTHONPATH=. python -m validate.rooms $(GAME)
 
 validate: validate-rooms
 
