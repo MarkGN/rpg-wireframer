@@ -5,8 +5,10 @@ if TYPE_CHECKING:
     from world import World
 from inkpython import Story
 import json
-from pathlib import Path
+import os
 import subprocess
+import tempfile
+from pathlib import Path
 from ..action import Action, InteractType
 from ..binder import Binder
 from ..context import Context
@@ -172,28 +174,80 @@ class Dialogue(Context):
 # ---------------------------------------------------------------------------
 
 
+def find_ink_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
+    candidate = dialogue_dir / ink_filename
+    if candidate.exists():
+        return candidate
+
+    target_name = Path(ink_filename).name
+    for path in sorted(dialogue_dir.rglob("*.ink")):
+        if path.name == target_name:
+            return path
+
+    return None
+
+
 def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
     """Return path to compiled .ink.json, compiling with inklecate if needed."""
-    ink_path = dialogue_dir / ink_filename
-    json_path = ink_path.with_suffix(".ink.json")
-
-    if not ink_path.exists():
-        print(f"[engine] Dialogue file not found: {ink_path}")
+    ink_path = find_ink_path(ink_filename, dialogue_dir)
+    if ink_path is None:
+        print(f"[engine] Dialogue file not found: {dialogue_dir / ink_filename}")
         return None
 
-    # Recompile if source is newer than compiled output.
-    if not json_path.exists() or ink_path.stat().st_mtime > json_path.stat().st_mtime:
-        result = subprocess.run(
-            ["inklecate", "-o", str(json_path), str(ink_path)],
-            capture_output=True,
-            text=True,
+    json_path = ink_path.with_suffix(".ink.json")
+    source_path = ink_path
+    temp_path = None
+
+    globals_path = dialogue_dir / "globals.ink"
+    if globals_path.exists():
+        include_path = os.path.relpath(globals_path, start=ink_path.parent)
+        temp_file = tempfile.NamedTemporaryFile(
+            dir=ink_path.parent,
+            suffix=".ink",
+            delete=False,
+            mode="w",
+            encoding="utf-8",
         )
-        if result.returncode != 0:
-            print(f"[debug] inklecate return code: {result.returncode}")
-            print(f"[debug] stdout: {result.stdout}")
-            print(f"[debug] stderr: {result.stderr}")
-            print(f"[debug] json expected at: {json_path}")
-            print(f"[debug] json exists: {json_path.exists()}")
-            return None
+        try:
+            temp_file.write(f"INCLUDE {include_path}\n")
+            temp_file.write(ink_path.read_text(encoding="utf-8"))
+            temp_file.close()
+            temp_path = Path(temp_file.name)
+            source_path = temp_path
+
+            if (
+                not json_path.exists()
+                or ink_path.stat().st_mtime > json_path.stat().st_mtime
+            ):
+                result = subprocess.run(
+                    ["inklecate", "-o", str(json_path), str(source_path)],
+                    capture_output=True,
+                    text=True,
+                )
+            else:
+                result = None
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
+    else:
+        if (
+            not json_path.exists()
+            or ink_path.stat().st_mtime > json_path.stat().st_mtime
+        ):
+            result = subprocess.run(
+                ["inklecate", "-o", str(json_path), str(source_path)],
+                capture_output=True,
+                text=True,
+            )
+        else:
+            result = None
+
+    if result is not None and result.returncode != 0:
+        print(f"[debug] inklecate return code: {result.returncode}")
+        print(f"[debug] stdout: {result.stdout}")
+        print(f"[debug] stderr: {result.stderr}")
+        print(f"[debug] json expected at: {json_path}")
+        print(f"[debug] json exists: {json_path.exists()}")
+        return None
 
     return json_path

@@ -1,7 +1,11 @@
 from pathlib import Path
+import shutil
 import sys
 
+import pytest
+
 from runners.context_independent_actions import get_context_independent_actions
+from runners.contexts.dialogue import find_ink_path, ink_json_path
 from runners.world import World
 
 
@@ -131,3 +135,35 @@ def test_context_independent_actions_follow_game_config():
     actions = get_context_independent_actions(world)
 
     assert [action["id"] for action in actions] == ["quit", "inventory"]
+
+
+def test_find_ink_path_searches_nested_directories(tmp_path):
+    dialogue_dir = tmp_path / "dialogue" / "friends" / "boys"
+    dialogue_dir.mkdir(parents=True)
+    nested_file = dialogue_dir / "jim.ink"
+    nested_file.write_text("// test ink file")
+
+    found = find_ink_path("jim.ink", tmp_path / "dialogue")
+
+    assert found == nested_file
+    assert find_ink_path("friends/boys/jim.ink", tmp_path / "dialogue") == nested_file
+
+
+def test_ink_json_path_compiles_nested_ink_with_globals_include(tmp_path):
+    if shutil.which("inklecate") is None:
+        pytest.skip("inklecate is not installed")
+
+    dialogue_dir = tmp_path / "dialogue"
+    nested_dir = dialogue_dir / "golden_route" / "girls"
+    nested_dir.mkdir(parents=True)
+
+    globals_file = dialogue_dir / "globals.ink"
+    globals_file.write_text("// helper functions\n")
+
+    nested_file = nested_dir / "jenny.ink"
+    nested_file.write_text("Hello.\n-> END\n")
+
+    compiled_json = ink_json_path("jenny.ink", dialogue_dir)
+
+    assert compiled_json is not None
+    assert compiled_json.exists()
