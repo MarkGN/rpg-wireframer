@@ -120,13 +120,6 @@ class Dialogue(Context):
 
         self.step_story()
 
-    # def step_story(self) -> None:
-    #     text = self.story.Continue().strip()
-    #     if not text:
-    #         self.step_story()
-    #     self.last_text = text
-    #     return
-
     def step_story(self):
         parts = []
 
