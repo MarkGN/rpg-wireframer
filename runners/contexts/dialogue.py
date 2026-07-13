@@ -78,8 +78,16 @@ class Dialogue(Context):
                 ext_remove_item(donor, value)
                 ext_add_item(recipient, value)
             elif isinstance(value, int):
+                print(donor, recipient, value, "bedugs")
+                print(world.world_state["game_objects"]["zorro"]["money"])
                 ext_increase(donor, -value)
                 ext_increase(recipient, value)
+                print(world.world_state["game_objects"]["zorro"]["money"])
+
+        def ext_loot() -> None:
+            donor = binder("$self.inventory")
+            recipient = binder("$player.inventory")
+            world.transfer_all(donor, recipient)
 
         def ext_has_item(key, item) -> int:
             terms = binder(key).split(".")
@@ -109,16 +117,30 @@ class Dialogue(Context):
             world.push_scenario(script=script, npc=self.npc)
             return
 
+        def ext_parse_inventory(obj: str):
+            s = binder(obj + ".inventory")
+            ls = world.get_state(s)
+            if len(ls) == 0:
+                return "nothing"
+            elif len(ls) == 1:
+                return ls[0]
+            elif len(ls) == 2:
+                return ls[0] + " and " + ls[1]
+            else:
+                return ", ".join(ls[:-1]) + ", and " + ls[-1]
+
         self.story.BindExternalFunction("get", ext_get)
         self.story.BindExternalFunction("set", ext_set)
         self.story.BindExternalFunction("increase", ext_increase)
         self.story.BindExternalFunction("transfer", ext_transfer)
+        self.story.BindExternalFunction("loot", ext_loot)
         self.story.BindExternalFunction("add", ext_add_item)
         self.story.BindExternalFunction("remove", ext_remove_item)
         self.story.BindExternalFunction("has", ext_has_item)
         self.story.BindExternalFunction("move", ext_move_npc)
         self.story.BindExternalFunction("present", ext_at_npc)
         self.story.BindExternalFunction("scenario", ext_scenario)
+        self.story.BindExternalFunction("parse_inventory", ext_parse_inventory)
 
         self.step_story()
 

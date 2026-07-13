@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from .world import World
+    from .context import Context
 from .action import Action, render_action
 
 
-def format_explore_header(world: Any, context: Any) -> list[str]:
+def format_explore_header(world: World, context: Context) -> list[str]:
     room = world.display_room()
     return [
         "#" * 30,
@@ -15,7 +18,7 @@ def format_explore_header(world: Any, context: Any) -> list[str]:
     ]
 
 
-def format_dialogue_header(world: Any, context: Any) -> list[str]:
+def format_dialogue_header(world: World, context: Context) -> list[str]:
     return [
         "#" * 30,
         world.world_state["game_objects"].get(context.npc, {}).get("name", None),
@@ -28,7 +31,7 @@ def format_combat_header() -> list[str]:
     return ["#" * 30, "You are in combat right now!", "#" * 30]
 
 
-def format_shop_header(world: Any, context: Any) -> list[str]:
+def format_shop_header(world: World, context: Context) -> list[str]:
     lines = ["#" * 30, context.line]
     for item in context.inventory:
         lines.append(
@@ -44,13 +47,13 @@ def format_context_independent_actions(
     return [(index, action["label"]) for index, action in enumerate(actions)]
 
 
-def format_actions(world: Any, actions: list[Action]) -> list[tuple[int, str]]:
+def format_actions(world: World, actions: list[Action]) -> list[tuple[int, str]]:
     return [
         (index, render_action(world, action)) for index, action in enumerate(actions)
     ]
 
 
-def format_quest_log(world: Any) -> list[str]:
+def format_quest_log(world: World) -> list[str]:
     entries = world.get_quest_log_entries()
     if not entries:
         return ["No active quests."]
@@ -61,7 +64,8 @@ def format_quest_log(world: Any) -> list[str]:
     return lines
 
 
-def format_inventory(world: Any) -> list[str]:
-    lines = [f"${world.world_state['player']['money']}"]
-    lines.extend(world.world_state["player"].get("inventory", []))
+def format_inventory(world: World) -> list[str]:
+    player = world.world_state["game_objects"][world.player_handle]
+    lines = [f"${player['money']}"]
+    lines.extend(player.get("inventory", []))
     return lines

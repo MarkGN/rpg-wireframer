@@ -127,26 +127,39 @@ class World:
         self.push_context(context="explore")
         self.current_room = location
 
-    def get_state(self, key):
-        terms = key.split(".")
+    def get_state(self, variable):
+        terms = variable.split(".")
         value = self.world_state
         for term in terms:
-            value = value[term]
+            index = int(term) if term.isdigit() else term
+            value = value[index]
         return value
 
-    def set_state(self, key, value):
-        terms = key.split(".")
+    def set_state(self, variable, value):
+        terms = variable.split(".")
         d = self.world_state
         for term in terms[:-1]:
             d = d[term]
         d[terms[-1]] = value
 
-    def add_item(self, key, item):
-        terms = key.split(".")
+    def add_item(self, inventory, item):
+        terms = inventory.split(".")
         d = self.world_state
         for term in terms[:-1]:
             d = d[term]
         d[terms[-1]].append(item)
+
+    def transfer_all(self, donor_inventory, recipient_inventory):
+        terms1 = donor_inventory.split(".")
+        terms2 = recipient_inventory.split(".")
+        d1 = self.world_state
+        for term in terms1[:-1]:
+            d1 = d1[term]
+        d2 = self.world_state
+        for term in terms2[:-1]:
+            d2 = d2[term]
+        d2[terms2[-1]].extend(d1[terms1[-1]])
+        d1[terms1[-1]] = []
 
     def npcs_in_room(self) -> list[str]:
         """Return npc_ids whose current location includes this room."""

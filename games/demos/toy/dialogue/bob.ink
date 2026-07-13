@@ -1,5 +1,3 @@
-INCLUDE globals.ink
-
 {get("bob.is_hostile"):
   -> challenge
 - else:

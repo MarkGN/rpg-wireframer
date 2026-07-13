@@ -3,6 +3,7 @@ description: A classic wooden treasure chest.
 portrait: null
 ink: chest
 interact_prompt: Open
-loot: ruby
+inventory: [ruby]
 open: false
 location: cave
+open: false

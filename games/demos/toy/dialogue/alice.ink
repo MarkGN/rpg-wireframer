@@ -1,4 +1,3 @@
-INCLUDE globals.ink
 -> greeting
 === greeting
 Hello!
