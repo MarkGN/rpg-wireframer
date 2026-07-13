@@ -11,7 +11,10 @@ run:
 validate-rooms:
 	PYTHONPATH=. python -m validate.rooms $(GAME)
 
-validate: validate-rooms
+validate-game-object:
+	PYTHONPATH=. python -m validate.game_objects $(GAME)
+
+validate: validate-rooms validate-game-object
 
 lint:
 	ruff check .
