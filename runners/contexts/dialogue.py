@@ -23,6 +23,7 @@ class Dialogue(Context):
 
     def __init__(self, npc):
         self.npc: str = npc
+        self.current_speaker = npc
         self.last_text: str = ""
         self.story: Story = None
 
@@ -129,6 +130,11 @@ class Dialogue(Context):
             else:
                 return ", ".join(ls[:-1]) + ", and " + ls[-1]
 
+        def ext_speaker(npc: str) -> None:
+            self.current_speaker = npc
+            print(npc)
+            input()  # TODO DELETE
+
         self.story.BindExternalFunction("get", ext_get)
         self.story.BindExternalFunction("set", ext_set)
         self.story.BindExternalFunction("increase", ext_increase)
@@ -141,6 +147,7 @@ class Dialogue(Context):
         self.story.BindExternalFunction("present", ext_at_npc)
         self.story.BindExternalFunction("scenario", ext_scenario)
         self.story.BindExternalFunction("parse_inventory", ext_parse_inventory)
+        self.story.BindExternalFunction("speaker", ext_speaker)
 
         self.step_story()
 

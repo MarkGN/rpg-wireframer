@@ -21,7 +21,9 @@ def format_explore_header(world: World, context: Context) -> list[str]:
 def format_dialogue_header(world: World, context: Context) -> list[str]:
     return [
         "#" * 30,
-        world.world_state["game_objects"].get(context.npc, {}).get("name", None),
+        world.world_state["game_objects"]
+        .get(context.current_speaker, {})
+        .get("name", None),
         context.last_text,
         "#" * 30,
     ]
