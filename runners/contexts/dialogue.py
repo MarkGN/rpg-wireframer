@@ -132,8 +132,6 @@ class Dialogue(Context):
 
         def ext_speaker(npc: str) -> None:
             self.current_speaker = npc
-            print(npc)
-            input()  # TODO DELETE
 
         self.story.BindExternalFunction("get", ext_get)
         self.story.BindExternalFunction("set", ext_set)
