@@ -11,35 +11,30 @@ from .action import Action, render_action
 def format_explore_header(world: World, context: Context) -> list[str]:
     room = world.display_room()
     return [
-        "#" * 30,
         room.get("name", f'{room.get("handle")} name not found'),
         room.get("description", None),
-        "#" * 30,
     ]
 
 
 def format_dialogue_header(world: World, context: Context) -> list[str]:
     return [
-        "#" * 30,
         world.world_state["game_objects"]
         .get(context.current_speaker, {})
         .get("name", None),
         context.last_text,
-        "#" * 30,
     ]
 
 
 def format_combat_header() -> list[str]:
-    return ["#" * 30, "You are in combat right now!", "#" * 30]
+    return ["You are in combat right now!"]
 
 
 def format_shop_header(world: World, context: Context) -> list[str]:
-    lines = ["#" * 30, context.line]
+    lines = [context.line]
     for item in context.inventory:
         lines.append(
             f"{world.world_state['items'][item]['name']} {world.world_state['items'][item]['price']}"
         )
-    lines.append("#" * 30)
     return lines
 
 

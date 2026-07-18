@@ -27,6 +27,7 @@ def main() -> None:
     while True:
         # get and print context from world
         context = world.get_context()
+        print("#" * 30)
         if isinstance(context, Combat):
             for line in format_combat_header():
                 print(line)
@@ -39,6 +40,7 @@ def main() -> None:
         elif isinstance(context, Shop):
             for line in format_shop_header(world, context):
                 print(line)
+        print("#" * 30)
         # get and print actions from world
         actions = context.actions(world)
         context_independent_actions = get_context_independent_actions(world)
