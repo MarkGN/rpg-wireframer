@@ -21,3 +21,6 @@ lint:
 
 format:
 	black .
+
+typecheck:
+	PYTHONPATH=. mypy . --ignore-missing-imports

@@ -9,7 +9,7 @@ import yaml
 
 if TYPE_CHECKING:
     from .context import Context
-    from .factory import ContextFactory
+from .factory import ContextFactory
 
 
 # ---------------------------------------------------------------------------
@@ -45,8 +45,8 @@ class World:
         self.world_state: dict[str, Any] = defaultdict(dict)
         self.player_handle: str = ""
         self.context_stack: list[Context] = []
-        self.context_factory: ContextFactory | None = None
-        self.current_room: str = None
+        self.context_factory: ContextFactory = ContextFactory()
+        self.current_room: str = ""
         self.game_settings: dict[str, Any] = {}
         self.load_world()
 
@@ -121,9 +121,7 @@ class World:
         location = pc_data.get("location")
         if location not in self.world_state["rooms"]:
             sys.exit(f"Error: PC location '{location}' not found in world/rooms/.")
-        from .factory import ContextFactory
 
-        self.context_factory = ContextFactory()
         self.push_context(context="explore")
         self.current_room = location
 
@@ -172,7 +170,7 @@ class World:
                 present.append(npc_id)
         return present
 
-    def display_room(self) -> None:
+    def display_room(self) -> dict[str, Any]:
         output = dict()
         room = self.world_state["rooms"][self.current_room]
         output["handle"] = self.current_room
@@ -188,7 +186,6 @@ class World:
         for npc_id in self.npcs_in_room():
             if self.world_state["game_objects"][npc_id].get("accosts", False):
                 return npc_id
-        return None
 
     def check_quest_triggers(self, event: str, target: str) -> None:
         """Advance quest stages when a trigger's conditions match."""

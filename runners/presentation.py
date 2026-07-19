@@ -4,19 +4,21 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .world import World
-    from .context import Context
+    from .contexts.explore import Explore
+    from .contexts.dialogue import Dialogue
+    from .contexts.shop import Shop
 from .action import Action, render_action
 
 
-def format_explore_header(world: World, context: Context) -> list[str]:
+def format_explore_header(world: World, context: Explore) -> list[str]:
     room = world.display_room()
     return [
         room.get("name", f'{room.get("handle")} name not found'),
-        room.get("description", None),
+        room.get("description", ""),
     ]
 
 
-def format_dialogue_header(world: World, context: Context) -> list[str]:
+def format_dialogue_header(world: World, context: Dialogue) -> list[str]:
     name = (
         world.world_state["game_objects"]
         .get(context.current_speaker, {})
@@ -34,7 +36,7 @@ def format_combat_header() -> list[str]:
     return ["You are in combat right now!"]
 
 
-def format_shop_header(world: World, context: Context) -> list[str]:
+def format_shop_header(world: World, context: Shop) -> list[str]:
     lines = [context.line]
     for item in context.inventory:
         lines.append(

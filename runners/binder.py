@@ -29,10 +29,10 @@ class Binder:
         """
 
         if isinstance(value, dict):
-            return {key: self.apply(val, self.bindings) for key, val in value.items()}
+            return {key: self.apply(val) for key, val in value.items()}
 
         if isinstance(value, list):
-            return [self.apply(item, self.bindings) for item in value]
+            return [self.apply(item) for item in value]
 
         if isinstance(value, str):
             value = resolve_path(value)
