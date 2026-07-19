@@ -1,7 +1,7 @@
 from typing import Any
 
 
-def resolve_path(path):
+def resolve_path(path: str) -> str:
     roots = {
         "player",
         "rooms",
@@ -21,7 +21,7 @@ class Binder:
     def __init__(self, bindings):
         self.bindings = bindings
 
-    def apply(self, value: dict[Any, Any] | list[str] | str):
+    def apply(self, value: dict[Any, Any] | list[str] | str) -> Any:
         """Recursively substitute $variables in strings.
         bindings is a dict like:
             {"self": "bob", "location": "town"}

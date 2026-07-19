@@ -4,7 +4,7 @@ from ..action import Action, InteractType
 from ..binder import Binder
 
 if TYPE_CHECKING:
-    from world import World
+    from ..world import World
 from ..context import Context
 
 BUY = "b"

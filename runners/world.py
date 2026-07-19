@@ -172,7 +172,7 @@ class World:
         return present
 
     def display_room(self) -> dict[str, Any]:
-        output = dict()
+        output: dict[str, Any] = dict()
         room = self.world_state["rooms"][self.current_room]
         output["handle"] = self.current_room
         output["name"] = room.get("name", self.current_room)
@@ -238,9 +238,9 @@ class World:
             )
         return entries
 
-    def handle_action(self, verb: str | object, target: str | None = None) -> None:
+    def handle_action(self, verb: str | None, target: str | None = None) -> None:
         if hasattr(verb, "interact_type") and hasattr(verb, "target"):
-            action = verb
+            action: Any = verb
             self.get_context().apply(action.interact_type, action.target, self)
             return
         self.get_context().apply(verb, target, self)

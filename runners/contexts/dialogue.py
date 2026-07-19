@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from world import World
+    from ..world import World
 from inkpython import Story
 import json
 import os
@@ -191,7 +191,7 @@ class Dialogue(Context):
             return [Action(InteractType.END_DIALOGUE)]
 
     # With dialogues, the verb is always "keep talking"
-    def apply(self, verb: str, target: str, world: World):
+    def apply(self, verb: str | None, target: str | None, world: World):
 
         self.last_text = ""
         if verb == InteractType.END_DIALOGUE:
