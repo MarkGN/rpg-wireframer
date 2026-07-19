@@ -29,7 +29,7 @@ class Combat(Context):
             for out in (x.split(">"),)
         ]
 
-    def actions(self, world: World):
+    def actions(self, world: World) -> list[Action]:
         return [Action(InteractType.FIGHT, key) for key in self.outcomes.keys()]
 
     # This is why we have to assume this was called from a Dialogue

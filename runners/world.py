@@ -9,6 +9,7 @@ import yaml
 
 if TYPE_CHECKING:
     from .context import Context
+    from .action import Action
 from .factory import ContextFactory
 
 
@@ -86,12 +87,12 @@ class World:
             quest_id = path.stem
             data = load_yaml(path)
 
-            state: dict = {}
+            quest: dict = {}
             for key, value in data.items():
-                state[key] = value
+                quest[key] = value
 
-            state.setdefault("stage", 0)
-            self.world_state["quests"][quest_id] = state
+            quest.setdefault("stage", 0)
+            self.world_state["quests"][quest_id] = quest
 
         # Global flags
         if self.flags_file.exists():
@@ -118,7 +119,7 @@ class World:
             "money": pc_data.get("money", 0),
         }
 
-        location = pc_data.get("location")
+        location = pc_data["location"]
         if location not in self.world_state["rooms"]:
             sys.exit(f"Error: PC location '{location}' not found in world/rooms/.")
 
@@ -178,7 +179,7 @@ class World:
         output["description"] = room.get("description", "")
         output["npcs"] = self.npcs_in_room()
         output["items"] = room.get("items", [])
-        output["exits"] = room.get("exits", {})
+        output["exits"] = room.get("exits", [])
         return output
 
     def check_accost(self) -> str | None:
@@ -186,6 +187,7 @@ class World:
         for npc_id in self.npcs_in_room():
             if self.world_state["game_objects"][npc_id].get("accosts", False):
                 return npc_id
+        return None
 
     def check_quest_triggers(self, event: str, target: str) -> None:
         """Advance quest stages when a trigger's conditions match."""
@@ -213,7 +215,7 @@ class World:
                 return npc_id
         return None
 
-    def get_actions(self) -> list[tuple[str, str]]:
+    def get_actions(self) -> list[Action]:
         """Return a list of valid actions."""
         return self.get_context().actions(self)
 
