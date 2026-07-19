@@ -17,10 +17,15 @@ def format_explore_header(world: World, context: Context) -> list[str]:
 
 
 def format_dialogue_header(world: World, context: Context) -> list[str]:
-    return [
+    name = (
         world.world_state["game_objects"]
         .get(context.current_speaker, {})
-        .get("name", None),
+        .get("name", None)
+    )
+    if not name:
+        name = context.current_speaker.capitalize()
+    return [
+        name,
         context.last_text,
     ]
 

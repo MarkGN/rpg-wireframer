@@ -60,6 +60,8 @@ def test_eve_blocks():
 
     actions = [
         ("g", "Eve's house"),
+        ("c", "-continue-"),
+        ("c", "-continue-"),
         ("c", "Fine."),
         ("c", "end dialogue"),
     ]
@@ -167,3 +169,44 @@ def test_ink_json_path_compiles_nested_ink_with_globals_include(tmp_path):
 
     assert compiled_json is not None
     assert compiled_json.exists()
+
+
+def test_speaker_chiming_in():
+    game_dir = get_game_dir()
+    world = World(Path(f"{game_dir}"))
+    world.load_world()
+
+    # Manually start talking to Bob
+    world.handle_action("t", "eve")
+
+    context = world.get_context()
+    assert context.current_speaker == "eve"
+    assert context.last_text == "Hi! Sorry, but you can't come in here."
+
+    # Verify that the action is to continue talking
+    actions = context.actions(world)
+    assert len(actions) == 1
+    assert actions[0].interact_type == "cont_talk"
+    assert actions[0].target == "-continue-"
+
+    # Continue the dialogue
+    world.handle_action("c", "-continue-")
+
+    # Verify that the speaker transitioned to Alice and the text updated
+    assert context.current_speaker == "dave"
+    assert context.last_text == "You suck!"
+
+    # Say fine
+    world.handle_action("c", "-continue-")
+    world.handle_action("c", "Fine.")
+
+    # Verify that the dialogue can now be ended
+    actions = context.actions(world)
+    assert len(actions) == 1
+    assert actions[0].interact_type == "end_dialogue"
+
+    # End the dialogue
+    world.handle_action("c", "end dialogue")
+
+    # Ensure we are back in the Explore context
+    assert world.get_context().__class__.__name__ == "Explore"

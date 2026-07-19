@@ -26,6 +26,8 @@ class Dialogue(Context):
         self.current_speaker = npc
         self.last_text: str = ""
         self.story: Story = None
+        self.buffered_text: str | None = None
+        self.buffered_speaker: str | None = None
 
     def on_enter(self, world: World) -> None:
         """
@@ -152,17 +154,33 @@ class Dialogue(Context):
     def step_story(self):
         parts = []
 
+        if self.buffered_text is not None:
+            self.current_speaker = self.buffered_speaker
+            parts.append(self.buffered_text)
+            self.buffered_text = None
+            self.buffered_speaker = None
+
         while self.story.canContinue:
+            old_speaker = self.current_speaker
             text = self.story.Continue()
             if text:
                 text = text.strip()
                 if text:
-                    parts.append(text)
+                    if self.current_speaker != old_speaker:
+                        if parts:
+                            self.buffered_text = text
+                            self.buffered_speaker = self.current_speaker
+                            self.current_speaker = old_speaker
+                            break
+                        else:
+                            parts.append(text)
+                    else:
+                        parts.append(text)
 
         self.last_text = "\n".join(parts)
 
     def actions(self, world: World):
-        if self.story.canContinue:
+        if self.story.canContinue or self.buffered_text is not None:
             return [Action(InteractType.CONTINUE_TALK, "-continue-")]
         elif self.story.currentChoices:
             return [
@@ -178,15 +196,12 @@ class Dialogue(Context):
         self.last_text = ""
         if verb == InteractType.END_DIALOGUE:
             world.pop_context()
-        elif self.story.canContinue:
-            lines = []
-            while self.story.canContinue:
-                lines.append(self.story.Continue().strip())
-            self.last_text = "\n".join(lines)
+        elif self.buffered_text is not None or self.story.canContinue:
+            self.step_story()
         elif self.story.currentChoices:
             ix = [c.text for c in self.story.currentChoices].index(target)
             self.story.ChooseChoiceIndex(ix)
-            self.last_text += self.story.Continue().strip()
+            self.step_story()
         else:
             world.pop_context()
 

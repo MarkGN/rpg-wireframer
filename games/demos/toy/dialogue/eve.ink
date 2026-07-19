@@ -1,7 +1,12 @@
 -> greeting
 === greeting
 
-Hi! Sorry, but you can't come in here. -> stonewall
+Hi! Sorry, but you can't come in here.
+~ speaker("dave")
+You suck!
+~ speaker("eve")
+No, you suck!
+ -> stonewall
 === stonewall
 + Why not? -> ask
 + Please? -> whine
