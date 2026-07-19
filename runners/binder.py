@@ -9,6 +9,7 @@ def resolve_path(path):
         "quests",
         "variables",
         "game_objects",
+        "global",
     }
     first = path.split(".", 1)[0]
     if first in roots:
