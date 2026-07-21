@@ -1,0 +1,5 @@
+name: Route 22
+description: Viridian City to Indigo Plateau
+exits: 
+  Viridian City: viridian
+  # Indigo Plateau: indigo

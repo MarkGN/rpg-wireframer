@@ -1,0 +1,5 @@
+context: combat
+enemies: [$self]
+outcomes:
+  - Win: win
+  - Lose: lose

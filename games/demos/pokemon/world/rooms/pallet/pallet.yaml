@@ -1,0 +1,7 @@
+name: Pallet Town
+description: A backwater town. You'll be glad to never come here again.
+exits: 
+  home: red_house
+  Blue's home: blue_house
+  Lab: oak_lab
+  Rt. 1: route_1

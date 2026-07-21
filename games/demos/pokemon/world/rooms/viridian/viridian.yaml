@@ -1,0 +1,10 @@
+name: Viridian City
+description: A much nicer city, notwithstanding the gang presence.
+exits: 
+  Pokecenter: viridian_poke
+  Shop: viridian_shop
+  Gym: viridian_gym
+  Nicknamer: nickname_house
+  Rt. 1: route_1
+  Rt. 2: route_2
+  Rt. 22: route_22

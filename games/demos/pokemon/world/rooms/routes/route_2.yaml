@@ -1,0 +1,7 @@
+name: Route 1
+description: Viridian City to Pewter Town, with a detour via the forest.
+exits: 
+  Viridian City: viridian
+  # Pewter Town: pewter
+  # Viridian Forest: forest
+# In the game, there are also some gatehouses.

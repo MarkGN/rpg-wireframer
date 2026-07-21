@@ -1,0 +1,7 @@
+context: explore
+player: red
+settings:
+  context_independent_actions:
+    - quit
+    - inventory
+    - quest_log

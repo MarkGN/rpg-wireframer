@@ -1,0 +1,5 @@
+name: Route 1
+description: Pallet to Viridian City.
+exits: 
+  Pallet Town: pallet
+  Viridian City: viridian

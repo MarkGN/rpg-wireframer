@@ -1,0 +1,4 @@
+name: Blue's house
+description: A one-storey house.
+exits: 
+  Town: pallet
