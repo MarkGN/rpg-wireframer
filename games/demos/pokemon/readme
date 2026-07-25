@@ -1,0 +1,7 @@
+This is an approximate Wireframer model of Pokemon Red.
+
+The point is to demonstrate a WF model of a real game, in particular what is and isn't included. WF models map connectivity, NPCs, and gating. All battle mechanics are abstracted away except field moves as necessary to model gating.
+
+If you were to build a game like this from scratch, it would help you ask questions like "Pallet Town is *really* sparse; is the low verisimilitude worth the high gameplay?" and "Oh shoot, I forgot to have the Viridian City gym get unlocked after you beat Blaine, let me add a trigger."
+
+Much of WF's utility is for game authoring, which obviously isn't relevant here since Pokemon already exists. Building a WF model ensures all content exists, helps level designers know how large areas should be, and the validator can prove quests are completable. Pokemon doesn't have explicit quests, but there's value in creating quests even if it's not shown to the player, since this lets the validator know to confirm they're doable; and it's not much extra effort because beating the gyms, Team Rocket, and the Elite Four, _are_ quests, this is just making it explicit, which is probably worth it anyway purely for documentation value.

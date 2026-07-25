@@ -6,6 +6,8 @@ Wireframer is an engine-agnostic tool for script-first RPG design. With this, yo
 
 The point is to a) force you to plan your scenario before charging in drawing maps, b) separate content and presentation and make it easier to develop, c) play your narrative graph to test that it works as intended, d) use automated tools to check for correctness and find common bugs, e) re-test it when you decide to change it, f) give an indication of the aesthetic feel of how art assets fit together.
 
+Use somewhat differs between validation and authoring. When validating, only plot-relevant NPCs are meaningful to include. When authoring, it's recommended to include even trivial NPCs with no more dialogue than "Welcome!". If you decide you want to edit some bit of dialogue late in development, all you have to do is make the edits and export all to your engine's format, unless your engine can use WF's Ink conventions directly. If you only model the most important NPCs in WF, you still have to write the dialogue for the less important ones, and you also need some way of combining exported Ink with whatever you write to use directly in your game. And it's helpful to intuit how lived-in an area will feel if you know how many people are there.
+
 # Installation
 
 For the text runner only:

@@ -81,11 +81,8 @@ class Dialogue(Context):
                 ext_remove_item(donor, value)
                 ext_add_item(recipient, value)
             elif isinstance(value, int):
-                print(donor, recipient, value, "bedugs")
-                print(world.world_state["game_objects"]["zorro"]["money"])
                 ext_increase(donor, -value)
                 ext_increase(recipient, value)
-                print(world.world_state["game_objects"]["zorro"]["money"])
 
         def ext_loot() -> None:
             donor = binder("$self.inventory")
@@ -284,12 +281,8 @@ def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
         else:
             result = None
 
-    if result is not None and result.returncode != 0:
-        print(f"[debug] inklecate return code: {result.returncode}")
-        print(f"[debug] stdout: {result.stdout}")
-        print(f"[debug] stderr: {result.stderr}")
-        print(f"[debug] json expected at: {json_path}")
-        print(f"[debug] json exists: {json_path.exists()}")
-        return None
+    assert (
+        result is None or result.returncode == 0
+    ), f"Bad .ink: {ink_filename}, {result.stdout}, {result.stderr}"
 
     return json_path

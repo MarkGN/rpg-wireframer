@@ -78,7 +78,9 @@ class World:
 
             state.setdefault("accosts", False)
             state.setdefault("dialogue", f"{npc_id}.ink")
+            state.setdefault("inventory", [])
             state.setdefault("is_visible", True)
+            state.setdefault("money", 0)
 
             self.world_state["game_objects"][npc_id] = state
 

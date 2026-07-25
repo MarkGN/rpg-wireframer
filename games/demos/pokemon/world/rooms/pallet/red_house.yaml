@@ -3,4 +3,3 @@ description: A two-storey house.
 exits: 
   outside: pallet
   upstairs: red_room
-items: []
