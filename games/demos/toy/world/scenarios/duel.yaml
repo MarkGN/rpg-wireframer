@@ -1,4 +1,4 @@
-context: combat
+context: encounter
 enemies: [$self]
 outcomes:
   - Fight and win: win

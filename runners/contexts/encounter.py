@@ -9,7 +9,7 @@ from ..context import Context
 FIGHT = "f"
 
 
-class Combat(Context):
+class Encounter(Context):
     """
     Fighting someone.
 

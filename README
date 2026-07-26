@@ -54,7 +54,7 @@ To test:
     ├── binder.py
     ├── context.py
     ├── contexts
-    │   ├── combat.py
+    │   ├── encounter.py
     │   ├── dialogue.py
     │   ├── explore.py
     │   └── shop.py
@@ -77,7 +77,7 @@ assets/
   sprites/      // .png or other image files
 runners/
   binder.py     // tools for binding variables to .ink and .yaml files
-  contexts/     // provides various game contexts: explore, dialogue, shop, combat
+  contexts/     // provides various game contexts: explore, dialogue, shop, encounter
   factory.py    // constructs game contexts
   text.py       // provides a text-only interface to engine.py
   world.py      // provides core step-through logic

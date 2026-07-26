@@ -32,8 +32,8 @@ def format_dialogue_header(world: World, context: Dialogue) -> list[str]:
     ]
 
 
-def format_combat_header() -> list[str]:
-    return ["You are in combat right now!"]
+def format_encounter_header() -> list[str]:
+    return ["You are in an encounter right now!"]
 
 
 def format_shop_header(world: World, context: Shop) -> list[str]:

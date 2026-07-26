@@ -1,4 +1,4 @@
-from .contexts.combat import Combat
+from .contexts.encounter import Encounter
 from .contexts.dialogue import Dialogue
 from .contexts.explore import Explore
 from .contexts.shop import Shop
@@ -11,7 +11,7 @@ class ContextFactory:
                 return Explore()
             case "dialogue":
                 return Dialogue(npc)
-            case "combat":
-                return Combat(scenario["outcomes"])
+            case "encounter":
+                return Encounter(scenario["outcomes"])
             case "shop":
                 return Shop(inventory_handle=scenario["stock"]["source"], npc=npc)

@@ -1,7 +1,7 @@
 from pathlib import Path
 from sys import argv
 
-from .contexts.combat import Combat
+from .contexts.encounter import Encounter
 from .contexts.dialogue import Dialogue
 from .contexts.explore import Explore
 from .contexts.shop import Shop
@@ -11,7 +11,7 @@ from .context_independent_actions import (
 )
 from .presentation import (
     format_actions,
-    format_combat_header,
+    format_encounter_header,
     format_context_independent_actions,
     format_dialogue_header,
     format_explore_header,
@@ -28,8 +28,8 @@ def main() -> None:
         # get and print context from world
         context = world.get_context()
         print("#" * 30)
-        if isinstance(context, Combat):
-            for line in format_combat_header():
+        if isinstance(context, Encounter):
+            for line in format_encounter_header():
                 print(line)
         if isinstance(context, Dialogue):
             for line in format_dialogue_header(world, context):

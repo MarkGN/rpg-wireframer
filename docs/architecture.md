@@ -24,7 +24,7 @@ Wireframer is technically a valid text-only game engine. It's not intended to be
 
 ## Contexts
 
-The game model uses a stack of contexts. A Context can be Explore, Dialogue, Combat, Shop, or in future others such as cutscenes and minigames. The world begins in Explore mode and it's impossible to remove this from the stack. A Context exposes a list of valid actions and can handle each of these actions, eg while exploring, actions might be moving to another area, talking to an NPC, or picking up an item. If we talk to an NPC, that pushes a Dialogue context onto the stack. If the NPC runs a shop, that further pushes a Shop context. When we stop shopping, that Context deletes itself; when we stop talking to him, that one deletes itself too.
+The game model uses a stack of contexts. A Context can be Explore, Dialogue, Encounter, Shop, or in future others such as cutscenes and minigames. The world begins in Explore mode and it's impossible to remove this from the stack. A Context exposes a list of valid actions and can handle each of these actions, eg while exploring, actions might be moving to another area, talking to an NPC, or picking up an item. If we talk to an NPC, that pushes a Dialogue context onto the stack. If the NPC runs a shop, that further pushes a Shop context. When we stop shopping, that Context deletes itself; when we stop talking to him, that one deletes itself too.
 
 Each Context presents its own actions. Others are available regardless of context, eg check inventory, quest log, or quit.
 
