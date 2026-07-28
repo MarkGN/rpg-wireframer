@@ -1,0 +1,5 @@
+name: Mount Moon
+description: Home of the clefairy.
+exits: 
+  Rt. 3: route_3
+  Rt. 4: route_4

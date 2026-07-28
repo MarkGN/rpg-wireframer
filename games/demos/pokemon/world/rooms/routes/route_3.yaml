@@ -1,0 +1,6 @@
+name: Route 3
+description: Pewter to Mt Moon.
+exits: 
+  Pewter City: pewter
+  Mount Moon: mt_moon
+  Mount Moon Pokecenter: mt_moon_poke

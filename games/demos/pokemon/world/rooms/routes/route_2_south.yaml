@@ -1,7 +1,7 @@
-name: Route 1
+name: Route 2 South
 description: Viridian City to Pewter Town, with a detour via the forest.
 exits: 
   Viridian City: viridian
-  # Pewter Town: pewter
-  # Viridian Forest: forest
+  Viridian Forest: forest
+  Rt 2 North: route_2_north
 # In the game, there are also some gatehouses.

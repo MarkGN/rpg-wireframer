@@ -1,0 +1,4 @@
+name: Mount Moon Pokemon Centre
+description: A pokemon centre.
+exits: 
+  Town: route_3

@@ -1,0 +1,4 @@
+name: Cerulean City
+description: A wet town.
+exits: 
+  Rt. 4: route_4
