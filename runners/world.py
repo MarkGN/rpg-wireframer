@@ -207,14 +207,73 @@ class World:
                 if set_stage is not None:
                     quest["stage"] = set_stage
 
-    def check_block(self, category, target) -> str | None:
-        """Return the first accosting NPC, if any"""
+    def check_block(self, category: str, target: str) -> str | None:
+        """Return the first accosting NPC guarding this target, if any."""
+        current_room_data = self.world_state["rooms"].get(self.current_room, {})
+
+        target_file_pointer = target
+        target_room_name = None
+
+        if category == "exits":
+            exits = current_room_data.get("exits", {})
+            exit_data = None
+            if isinstance(exits, dict):
+                exit_data = exits.get(target)
+            elif isinstance(exits, list):
+                for exit_item in exits:
+                    if isinstance(exit_item, dict) and target in exit_item:
+                        exit_data = exit_item[target]
+                        break
+                    elif isinstance(exit_item, str) and exit_item == target:
+                        exit_data = exit_item
+                        break
+
+            if exit_data is not None:
+                if isinstance(exit_data, str):
+                    target_file_pointer = exit_data
+                elif isinstance(exit_data, dict):
+                    target_file_pointer = exit_data.get("room", target)
+
+            if target_file_pointer in self.world_state["rooms"]:
+                target_room_name = self.world_state["rooms"][target_file_pointer].get(
+                    "name"
+                )
+        elif category == "items":
+            if target in self.world_state["items"]:
+                target_room_name = self.world_state["items"][target].get("name")
+
         for npc_id in self.npcs_in_room():
-            guards = self.world_state["game_objects"][npc_id].get(
-                "guards_" + category, {}
-            )
-            if target in [self.world_state["rooms"][g]["name"] for g in guards]:
-                return npc_id
+            npc_data = self.world_state["game_objects"].get(npc_id, {})
+            guards_raw = npc_data.get("guards_" + category)
+            if guards_raw is None and category.endswith("s"):
+                guards_raw = npc_data.get("guards_" + category[:-1])
+
+            if guards_raw is None:
+                continue
+
+            if isinstance(guards_raw, str):
+                guards_list = [guards_raw]
+            elif isinstance(guards_raw, list):
+                guards_list = guards_raw
+            elif isinstance(guards_raw, dict):
+                guards_list = list(guards_raw.keys())
+            else:
+                guards_list = []
+
+            for g in guards_list:
+                if not isinstance(g, str):
+                    continue
+                if g == target_file_pointer or g == target:
+                    return npc_id
+                if target_room_name and g == target_room_name:
+                    return npc_id
+                if g in self.world_state["rooms"]:
+                    g_room_name = self.world_state["rooms"][g].get("name")
+                    if g_room_name and (
+                        g_room_name == target or g_room_name == target_room_name
+                    ):
+                        return npc_id
+
         return None
 
     def get_actions(self) -> list[Action]:

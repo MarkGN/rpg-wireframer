@@ -210,3 +210,30 @@ def test_speaker_chiming_in():
 
     # Ensure we are back in the Explore context
     assert world.get_context().__class__.__name__ == "Explore"
+
+
+def test_check_block_file_pointer():
+    game_dir = get_game_dir()
+    world = World(Path(f"{game_dir}"))
+    world.load_world()
+
+    world.world_state["rooms"]["street"] = {
+        "name": "Street",
+        "exits": {"Red house": "house"},
+        "items": [],
+    }
+    world.world_state["rooms"]["house"] = {
+        "name": "Jenny's house",
+        "exits": {},
+        "items": [],
+    }
+    world.world_state["game_objects"]["guard"] = {
+        "name": "Guard",
+        "location": ["street"],
+        "guards_exit": ["house"],
+    }
+
+    world.current_room = "street"
+
+    blocking = world.check_block("exits", "Red house")
+    assert blocking == "guard"
