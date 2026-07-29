@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..world import World
 from inkpython import Story
+import inkpython
 import json
 import os
 import subprocess
@@ -149,32 +150,35 @@ class Dialogue(Context):
         self.step_story()
 
     def step_story(self):
-        parts = []
+        try:
+            parts = []
 
-        if self.buffered_text is not None:
-            self.current_speaker = self.buffered_speaker
-            parts.append(self.buffered_text)
-            self.buffered_text = None
-            self.buffered_speaker = None
+            if self.buffered_text is not None:
+                self.current_speaker = self.buffered_speaker
+                parts.append(self.buffered_text)
+                self.buffered_text = None
+                self.buffered_speaker = None
 
-        while self.story.canContinue:
-            old_speaker = self.current_speaker
-            text = self.story.Continue()
-            if text:
-                text = text.strip()
+            while self.story.canContinue:
+                old_speaker = self.current_speaker
+                text = self.story.Continue()
                 if text:
-                    if self.current_speaker != old_speaker:
-                        if parts:
-                            self.buffered_text = text
-                            self.buffered_speaker = self.current_speaker
-                            self.current_speaker = old_speaker
-                            break
+                    text = text.strip()
+                    if text:
+                        if self.current_speaker != old_speaker:
+                            if parts:
+                                self.buffered_text = text
+                                self.buffered_speaker = self.current_speaker
+                                self.current_speaker = old_speaker
+                                break
+                            else:
+                                parts.append(text)
                         else:
                             parts.append(text)
-                    else:
-                        parts.append(text)
 
-        self.last_text = "\n".join(parts)
+            self.last_text = "\n".join(parts)
+        except inkpython.engine.story_exception.StoryException:
+            self.story.Error(f"Ink error at {self.story.state.currentPointer}")
 
     def actions(self, world: World):
         if self.story.canContinue or self.buffered_text is not None:
