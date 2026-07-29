@@ -1,0 +1,5 @@
+name: Route 13
+description: Rt. 12 to Rt. 14.
+exits: 
+  Rt. 12: route_12_south
+  Rt. 14: route_14

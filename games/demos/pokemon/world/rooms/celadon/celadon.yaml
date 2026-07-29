@@ -1,0 +1,7 @@
+name: Celadon City
+description: A much nicer city, notwithstanding the gang presence.
+exits: 
+  Pokecenter: celadon_poke
+  Shop: celadon_shop
+  Gym: celadon_gym
+  Rt. 16: route_16

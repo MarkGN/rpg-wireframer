@@ -1,0 +1,5 @@
+name: Route 23
+description: Victory Road to Indigo Plateau.
+exits: 
+  Victory Road: victory
+  Indigo Plateau: indigo

@@ -1,0 +1,5 @@
+name: Route 5
+description: Cerulean to Saffron City.
+exits: 
+  Cerulean City: cerulean
+  Saffron City: saffron

@@ -1,0 +1,4 @@
+name: Cinnabar Island Pokemon Centre
+description: A pokemon centre.
+exits: 
+  Town: cinnabar

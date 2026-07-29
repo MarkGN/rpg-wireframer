@@ -1,0 +1,5 @@
+name: Route 16
+description: Rt. 16 to Celadon City.
+exits: 
+  Rt. 17: route_17
+  Celadon City: celadon

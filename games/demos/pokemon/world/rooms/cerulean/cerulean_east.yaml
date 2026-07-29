@@ -1,0 +1,5 @@
+name: Cerulean City East
+description: A wet town.
+exits: 
+  Rt. 5: route_5
+  Rt. 9: route_9

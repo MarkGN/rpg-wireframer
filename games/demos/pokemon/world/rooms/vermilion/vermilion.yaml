@@ -1,0 +1,11 @@
+name: Vermilion City
+description: A much nicer city, notwithstanding the gang presence.
+exits:
+  Pokecenter: vermilion_poke
+  Shop: vermilion_shop
+  Gym: vermilion_gym
+  Old Rod House: old_rod
+  Pidgey House: pidgey
+  Rt. 6: route_6
+  Rt. 11: route_11
+  Dock: dock

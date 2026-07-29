@@ -1,4 +1,8 @@
 name: Cerulean City West
 description: A wet town.
 exits: 
+  Pokecenter: cerulean_poke
+  Shop: cerulean_shop
+  Gym: cerulean_gym
+  Trashed house: cerulean_trashed
   Rt. 4: route_4

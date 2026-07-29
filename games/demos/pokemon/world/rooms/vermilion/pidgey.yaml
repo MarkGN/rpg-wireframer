@@ -1,0 +1,4 @@
+name: Pidgey House
+description: A house.
+exits: 
+  Town: vermilion

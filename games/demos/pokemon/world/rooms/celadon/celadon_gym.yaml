@@ -1,0 +1,4 @@
+name: Celadon City Gym
+description: A gym.
+exits: 
+  Town: celadon

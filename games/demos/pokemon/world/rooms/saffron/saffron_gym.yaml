@@ -1,0 +1,4 @@
+name: Saffron City Gym
+description: A gym.
+exits: 
+  Town: saffron

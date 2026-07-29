@@ -1,0 +1,10 @@
+name: Cinnabar Island
+description: An island that may or may not be where Ozai lives.
+exits: 
+  Pokecenter: cinnabar_poke
+  Shop: cinnabar_shop
+  Gym: cinnabar_gym
+  Lab: cinnabar_lab
+  Pokemon Mansion: mansion
+  Rt. 20: route_20
+  Rt. 21: route_21

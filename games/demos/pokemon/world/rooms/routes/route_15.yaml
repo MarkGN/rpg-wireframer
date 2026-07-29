@@ -1,0 +1,5 @@
+name: Route 15
+description: Rt. 14 to Fuschia City.
+exits: 
+  Rt. 14: route_14
+  Fuschia City: fuschia

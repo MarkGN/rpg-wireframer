@@ -1,0 +1,10 @@
+name: Fuschia City
+description: A much nicer city, notwithstanding the gang presence.
+exits: 
+  Pokecenter: fuschia_poke
+  Shop: fuschia_shop
+  Gym: fuschia_gym
+  Safari Zone: safari
+  Rt. 15: route_15
+  Rt. 18: route_18
+  Rt. 19: route_19

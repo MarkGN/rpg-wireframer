@@ -1,0 +1,6 @@
+name: Route 12
+description: Lavender to Rt. 11 and 13.
+exits: 
+  Lavender City: lavender
+  Rt. 11: route_11
+  Rt. 12 South: route_12_south

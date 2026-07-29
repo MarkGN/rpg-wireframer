@@ -1,0 +1,5 @@
+name: Route 21
+description: Pallet Town to Cinnabar Island.
+exits: 
+  Pallet Town: pallet
+  Cinnabar Island: cinnabar

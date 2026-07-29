@@ -1,0 +1,5 @@
+name: Route 20
+description: Cinnabar Island to Seafoam Islands.
+exits: 
+  Cinnabar Island: cinnabar
+  Seafoam Islands: seafoam

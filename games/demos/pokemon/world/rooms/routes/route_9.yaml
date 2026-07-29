@@ -1,0 +1,5 @@
+name: Route 9
+description: Cerulean City to Rt. 10.
+exits: 
+  Cerulean City: cerulean_east
+  Rt. 10: route_10

@@ -1,0 +1,4 @@
+name: Celadon City Pokemon Centre
+description: A pokemon centre.
+exits: 
+  Town: celadon

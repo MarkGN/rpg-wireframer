@@ -1,0 +1,5 @@
+name: Route 8
+description: Saffron City to Lavender Town.
+exits: 
+  Saffron City: saffron
+  Lavender Town: lavender

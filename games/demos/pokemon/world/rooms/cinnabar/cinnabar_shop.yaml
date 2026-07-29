@@ -1,0 +1,4 @@
+name: Cinnabar Island Pokemart
+description: A shop.
+exits: 
+  Town: cinnabar

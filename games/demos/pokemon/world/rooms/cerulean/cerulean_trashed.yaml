@@ -1,0 +1,5 @@
+name: Trashed house
+description: A house that's been violently turned over.
+exits: 
+  front: cerulean
+  Hole in the back: cerulean_east

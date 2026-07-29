@@ -1,0 +1,5 @@
+name: Route 18
+description: Rt. 17 to Fuschia City.
+exits: 
+  Rt. 17: route_17
+  Fuschia City: fuschia

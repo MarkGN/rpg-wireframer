@@ -1,0 +1,5 @@
+name: Route 6
+description: Saffron to Vermilion City.
+exits: 
+  Saffron City: saffron
+  Vermilion City: vermilion
