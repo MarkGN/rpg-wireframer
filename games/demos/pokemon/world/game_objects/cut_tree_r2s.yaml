@@ -1,5 +1,0 @@
-name: CUTtable tree
-description: A tree.
-location: route_2_south
-ink: cut_tree
-guards_exits: [route_2_north]

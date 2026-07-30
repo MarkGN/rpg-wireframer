@@ -2,3 +2,5 @@ name: Cinnabar Island Gym
 description: A gym.
 exits: 
   Town: cinnabar
+objects:
+  - blaine

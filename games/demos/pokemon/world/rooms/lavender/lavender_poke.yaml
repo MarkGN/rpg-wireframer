@@ -2,3 +2,5 @@ name: Lavender City Pokemon Centre
 description: A pokemon centre.
 exits: 
   Town: lavender
+objects: 
+  - joy

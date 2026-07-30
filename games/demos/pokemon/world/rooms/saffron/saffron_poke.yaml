@@ -2,3 +2,5 @@ name: Saffron City Pokemon Centre
 description: A pokemon centre.
 exits: 
   Town: saffron
+objects: 
+  - joy

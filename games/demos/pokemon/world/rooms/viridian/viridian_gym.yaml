@@ -2,3 +2,5 @@ name: Viridian City Gym
 description: A gym.
 exits: 
   Town: viridian
+objects:
+  - giovanni

@@ -52,20 +52,6 @@ def validate_game_objects(game_path: Path | str) -> None:
                 f"Game object {object_id} must have a non-empty description"
             )
 
-        location = data.get("location")
-        if location is None:
-            raise ValueError(f"Game object {object_id} must have a location")
-        if isinstance(location, list):
-            invalid_locations = [item for item in location if not isinstance(item, str)]
-            if invalid_locations:
-                raise ValueError(
-                    f"Game object {object_id} has invalid location values: {invalid_locations}"
-                )
-        elif not isinstance(location, str):
-            raise ValueError(
-                f"Game object {object_id} has invalid location value {location!r}"
-            )
-
         inventory = data.get("inventory")
         if inventory is not None:
             if not isinstance(inventory, list):

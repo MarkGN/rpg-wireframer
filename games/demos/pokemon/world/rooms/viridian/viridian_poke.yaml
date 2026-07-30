@@ -2,3 +2,5 @@ name: Viridian City Pokemon Centre
 description: A pokemon centre.
 exits: 
   Town: viridian
+objects: 
+  - joy

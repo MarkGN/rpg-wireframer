@@ -3,7 +3,6 @@ description: A much nicer city, notwithstanding the gang presence.
 exits: 
   Pokecenter: lavender_poke
   Shop: lavender_shop
-  Gym: lavender_gym
   Rt. 8: route_8
   Rt. 12: route_12
   Rock tunnel: rock_tunnel

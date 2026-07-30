@@ -1,5 +1,5 @@
-name: Viridian Forest
-description: So many weedles.
+name: Seafoam Islands
+description: Cold and wet.
 exits: 
-  Rt. 2 South: route_2_south
-  Rt. 2 North: route_2_north
+  Rt. 19: route_19
+  Rt. 20: route_20

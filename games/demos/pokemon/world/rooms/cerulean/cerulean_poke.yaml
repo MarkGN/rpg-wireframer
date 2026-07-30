@@ -2,3 +2,5 @@ name: Cerulean City Pokemon Centre
 description: A pokemon centre.
 exits: 
   Town: cerulean
+objects: 
+  - joy

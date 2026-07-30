@@ -1,5 +1,5 @@
-name: Route 4
-description: Mt Moon to Cerulean City.
+name: Route 19
+description: Fuschia City to Seafoam Islands.
 exits: 
-  Mount Moon: mt_moon
-  Cerulean City: cerulean
+  Fuschia City: fuschia
+  Seafoam Islands: seafoam

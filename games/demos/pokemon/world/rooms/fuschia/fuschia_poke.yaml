@@ -2,3 +2,5 @@ name: Fuschia City Pokemon Centre
 description: A pokemon centre.
 exits: 
   Town: fuschia
+objects: 
+  - joy

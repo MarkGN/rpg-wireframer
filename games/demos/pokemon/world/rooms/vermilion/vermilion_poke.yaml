@@ -2,3 +2,5 @@ name: Vermilion City Pokemon Centre
 description: A pokemon centre.
 exits: 
   Town: vermilion
+objects: 
+  - joy

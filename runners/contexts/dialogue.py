@@ -58,7 +58,13 @@ class Dialogue(Context):
         self.story = Story(story_data)
 
         def binder(key):
-            return Binder({"player": world.player_handle, "self": self.npc}).apply(key)
+            return Binder(
+                {
+                    "player": world.player_handle,
+                    "self": self.npc,
+                    "current_room": world.current_room,
+                }
+            ).apply(key)
 
         # --- register external functions ---
 

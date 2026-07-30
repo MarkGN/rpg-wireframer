@@ -3,3 +3,5 @@ description: A two-storey house.
 exits: 
   outside: pallet
   upstairs: red_room
+objects:
+  - red_mom

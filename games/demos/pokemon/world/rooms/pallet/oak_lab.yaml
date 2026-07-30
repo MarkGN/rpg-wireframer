@@ -2,3 +2,6 @@ name: Oak's Lab
 description: The workshop of a mad scientist who gives reality warping gremlins to unsupervised prepubescent children.
 exits: 
   outside: pallet
+objects:
+  - blue
+  - oak

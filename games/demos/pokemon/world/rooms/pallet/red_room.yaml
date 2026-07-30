@@ -2,4 +2,5 @@ name: Red's room
 description: A bedroom. Lots of pokemon posters and merchandise. You're clearly a major nerd.
 exits: 
   downstairs: red_house
-items: []
+objects:
+  - red

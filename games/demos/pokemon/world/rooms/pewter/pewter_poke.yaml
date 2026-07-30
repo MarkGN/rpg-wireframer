@@ -2,3 +2,5 @@ name: Pewter City Pokemon Centre
 description: A pokemon centre.
 exits: 
   Town: pewter
+objects: 
+  - joy
