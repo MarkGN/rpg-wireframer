@@ -3,3 +3,19 @@ description: So many weedles.
 exits: 
   Rt. 2 South: route_2_south
   Rt. 2 North: route_2_north
+objects:
+  - bc1:
+    inherits: bug_catcher
+    team: [weedle5, caterpie5]
+    money: 60
+    ink: vf_bug1
+  - bc2:
+    inherits: bug_catcher
+    team: [weedle5, weedle5, weedle5]
+    money: 70
+    ink: vf_bug2
+  - bc3:
+    inherits: bug_catcher
+    team: [metapod8, kakuna8]
+    money: 60
+    ink: vf_bug3

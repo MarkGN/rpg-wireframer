@@ -2,5 +2,9 @@ name: Route 2 North
 description: Viridian City to Pewter Town, with a detour via the forest.
 exits: 
   Pewter Town: pewter
-  Rt 2 South: route_2_south
-objects: cut_tree_r2n
+  Viridian Forest: forest
+  Rt 2 Middle: route_2_mid
+objects: 
+  - tree:
+    template: cut_tree
+    guards_exits: [route_2_mid]

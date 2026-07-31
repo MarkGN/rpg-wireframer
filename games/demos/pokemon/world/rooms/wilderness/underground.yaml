@@ -1,0 +1,5 @@
+name: Underground
+description: A shortcut.
+exits: 
+  Rt. 7: route_7
+  Rt. 8: route_8

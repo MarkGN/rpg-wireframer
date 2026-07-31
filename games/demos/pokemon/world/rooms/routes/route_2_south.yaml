@@ -3,6 +3,9 @@ description: Viridian City to Pewter Town
 exits: 
   Viridian City: viridian
   Viridian Forest: forest
-  Rt 2 North: route_2_north
+  Rt 2 Middle: route_2_mid
 # In the game, there are also some gatehouses.
-objects: cut_tree_r2s
+objects: 
+  - tree:
+    template: cut_tree
+    guards_exits: [route_2_mid]

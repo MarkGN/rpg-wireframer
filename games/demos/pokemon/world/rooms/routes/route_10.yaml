@@ -2,4 +2,9 @@ name: Route 10
 description: Rt. 9 to Power Plant.
 exits: 
   Rt. 9: route_9
+  Rock tunnel: rock_tunnel
   Power Plant: power
+objects: 
+  - w:
+    template: water
+    guards_exits: [power]

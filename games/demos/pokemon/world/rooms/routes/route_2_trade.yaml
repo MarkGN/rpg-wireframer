@@ -1,0 +1,4 @@
+name: Trade House
+description: Viridian City to Pewter Town
+exits: 
+  outside: route_2_mid

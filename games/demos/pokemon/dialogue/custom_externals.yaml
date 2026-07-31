@@ -1,2 +1,5 @@
 poke_heal:
   - args: 0
+
+victory:
+  - args: 0

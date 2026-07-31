@@ -1,0 +1,4 @@
+inherits: trainer
+abstract: true
+name: Bug catcher
+description: A guy with a thing for bugs.

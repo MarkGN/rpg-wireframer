@@ -1,0 +1,3 @@
+Pokemon Red happens to have a common structure of trainers who have some pre-fight lines, then you fight, you beat them, they say some more lines, you go through their pockets, and they have a final line.
+
+Rather than write a million Ink files repeating this pattern, we create an authoring/ directory with trainer_dialogues.csv, and a dialogues_csv_to_ink.py script to convert it to WF's representation. Note that this applies only to generic trainers. Those with special behaviour have their Ink files written directly: gym leaders who also give badges and TMs, the rival, Rocketeers who wander off, etc.
