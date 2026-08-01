@@ -117,8 +117,8 @@ class Dialogue(Context):
         def ext_at_npc(npc):
             return npc in world.npcs_in_room()
 
-        def ext_move_npc(npc, location):
-            world.world_state["game_objects"][npc]["location"] = [location]
+        def ext_move_npc(npc, source_room, destination_room):
+            world.move_object(npc, source_room, destination_room)
 
         def ext_scenario(script):
             world.push_scenario(script=script, npc=self.npc)

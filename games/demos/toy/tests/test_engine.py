@@ -223,20 +223,20 @@ def test_check_block_file_pointer():
     world = World(Path(f"{game_dir}"))
     world.load_world()
 
+    world.world_state["game_objects"]["guard"] = {
+        "name": "Guard",
+        "guards_exit": ["house"],
+    }
     world.world_state["rooms"]["street"] = {
         "name": "Street",
         "exits": {"Red house": "house"},
         "items": [],
+        "objects": ["guard"],
     }
     world.world_state["rooms"]["house"] = {
         "name": "Jenny's house",
         "exits": {},
         "items": [],
-    }
-    world.world_state["game_objects"]["guard"] = {
-        "name": "Guard",
-        "location": ["street"],
-        "guards_exit": ["house"],
     }
 
     world.current_room = "street"

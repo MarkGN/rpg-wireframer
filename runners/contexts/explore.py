@@ -38,10 +38,9 @@ class Explore(Context):
                 if blocking:
                     world.push_context("dialogue", npc=blocking)
                     return
-                world.current_room = exits[target]
-                world.world_state["game_objects"][world.player_handle][
-                    "location"
-                ] = world.current_room
+                destination = exits[target]
+                world.move_object(world.player_handle, world.current_room, destination)
+                world.current_room = destination
                 world.check_quest_triggers("enter_room", world.current_room)
                 accosting = world.check_accost()
                 if accosting:

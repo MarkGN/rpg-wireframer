@@ -22,6 +22,7 @@ You again! You won't escape me so easily this time! En garde!
 Jeez. You are actually really fast.
 You know what? I've got enough cardio for today. You win. I'm not going to rob you.
 ~ set("bob.is_hostile", false)
+~ move("bob", "field", "red_town")
 -> END
 }
 
@@ -43,7 +44,7 @@ Huh. No-one ever says that. Sweet. -> lose
 }
 ~ set("bob.is_hostile", false)
 ~ set("bob.accosts", 0)
-~ move("bob", "red_town")
+~ move("bob", "field", "red_town")
 # portrait: bob-sad
 Okay, I give up. You win.
 I'll go back to town. -> END
@@ -60,7 +61,7 @@ I'll go back to town. -> END
     # portrait: bob-sad
     ... I sat around here for this long and you don't even have any money?! Ugh.
 }
-~ move("bob", "red_town")
+~ move("bob", "field", "red_town")
 ~ set("bob.accosts", 0)
 Anyway, I'm going back to town. No hard feelings, yeah? -> END
 

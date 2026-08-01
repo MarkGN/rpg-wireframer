@@ -68,6 +68,7 @@ class World:
             self.world_state["items"][item_id] = data
 
         # Game Objects such as NPCs
+        game_objects: dict[str, dict[str, Any]] = {}
         for path in sorted(self.game_objects_dir.rglob("*.yaml")):
             npc_id = path.stem
             data = load_yaml(path)
@@ -82,7 +83,60 @@ class World:
             state.setdefault("is_visible", True)
             state.setdefault("money", 0)
 
-            self.world_state["game_objects"][npc_id] = state
+            game_objects[npc_id] = state
+
+        # Populate room object references from room definitions first.
+        # If the world is still using the old object.location model, infer room
+        # placement from those values for backward compatibility.
+        any_objects_defined = any(
+            room_data.get("objects") is not None
+            for room_data in self.world_state["rooms"].values()
+        )
+        if not any_objects_defined:
+            for npc_id, meta in game_objects.items():
+                location = meta.pop("location", None)
+                if location is None:
+                    continue
+                if isinstance(location, str):
+                    if location not in self.world_state["rooms"]:
+                        sys.exit(
+                            f"Error: object '{npc_id}' location '{location}' not found in world/rooms/."
+                        )
+                    self.world_state["rooms"][location].setdefault(
+                        "objects", []
+                    ).append(npc_id)
+                elif isinstance(location, list):
+                    for room_name in location:
+                        if room_name not in self.world_state["rooms"]:
+                            sys.exit(
+                                f"Error: object '{npc_id}' location '{room_name}' not found in world/rooms/."
+                            )
+                        self.world_state["rooms"][room_name].setdefault(
+                            "objects", []
+                        ).append(npc_id)
+                else:
+                    sys.exit(
+                        f"Error: object '{npc_id}' has invalid location value {location!r}"
+                    )
+        else:
+            # Normalize objects lists for all rooms.
+            for room_data in self.world_state["rooms"].values():
+                room_data.setdefault("objects", [])
+            for meta in game_objects.values():
+                meta.pop("location", None)
+
+        # Build the current active game object map from room placement.
+        placed_objects: set[str] = set()
+        for room_data in self.world_state["rooms"].values():
+            for obj_handle in room_data.get("objects", []):
+                if obj_handle not in game_objects:
+                    sys.exit(
+                        f"Error: room references unknown game object '{obj_handle}'."
+                    )
+                placed_objects.add(obj_handle)
+
+        for obj_handle in sorted(placed_objects):
+            self.world_state["game_objects"][obj_handle] = game_objects[obj_handle]
 
         # Quests
         for path in sorted(self.quests_dir.rglob("*.yaml")):
@@ -105,23 +159,27 @@ class World:
         game_data = load_yaml(self.game_file)
         self.player_handle = game_data["player"]
         self.game_settings = game_data.get("settings", {})
-        player_path = None
-        for path in sorted(self.game_objects_dir.rglob("*.yaml")):
-            if path.stem == self.player_handle:
-                player_path = path
-                break
-        if player_path is None:
+        if self.player_handle not in self.world_state["game_objects"]:
             sys.exit(
-                f"Error: player '{self.player_handle}' not found in world/game_objects/."
+                f"Error: player '{self.player_handle}' not placed in any room in world/rooms/."
             )
-        pc_data = load_yaml(player_path)
 
-        location = pc_data["location"]
-        if location not in self.world_state["rooms"]:
-            sys.exit(f"Error: PC location '{location}' not found in world/rooms/.")
+        player_rooms = [
+            room_id
+            for room_id, room_data in self.world_state["rooms"].items()
+            if self.player_handle in room_data.get("objects", [])
+        ]
+        if len(player_rooms) != 1:
+            sys.exit(
+                f"Error: player '{self.player_handle}' must be placed in exactly one room, found {len(player_rooms)}."
+            )
+
+        self.current_room = player_rooms[0]
+        self.world_state["player"] = self.world_state["game_objects"][
+            self.player_handle
+        ]
 
         self.push_context(context="explore")
-        self.current_room = location
 
     def get_state(self, variable):
         terms = variable.split(".")
@@ -157,14 +215,28 @@ class World:
         d2[terms2[-1]].extend(d1[terms1[-1]])
         d1[terms1[-1]] = []
 
+    def move_object(self, npc_id: str, from_room: str, to_room: str) -> None:
+        if from_room not in self.world_state["rooms"]:
+            raise ValueError(f"Unknown room '{from_room}'")
+        if to_room not in self.world_state["rooms"]:
+            raise ValueError(f"Unknown room '{to_room}'")
+
+        from_objects = self.world_state["rooms"][from_room].setdefault("objects", [])
+        to_objects = self.world_state["rooms"][to_room].setdefault("objects", [])
+
+        if npc_id in from_objects:
+            from_objects.remove(npc_id)
+        if npc_id not in to_objects:
+            to_objects.append(npc_id)
+
     def npcs_in_room(self) -> list[str]:
-        """Return npc_ids whose current location includes this room."""
+        """Return npc_ids currently present in the active room."""
         present = []
-        for npc_id, meta in self.world_state["game_objects"].items():
-            loc = meta.get("location", [])
-            if isinstance(loc, str) and loc == self.current_room:
-                present.append(npc_id)
-            elif isinstance(loc, list) and self.current_room in loc:
+        for npc_id in self.world_state["rooms"][self.current_room].get("objects", []):
+            if npc_id == self.player_handle:
+                continue
+            npc_data = self.world_state["game_objects"].get(npc_id, {})
+            if npc_data.get("is_visible", True):
                 present.append(npc_id)
         return present
 
