@@ -5,4 +5,4 @@ exits:
   Eve's house: eve_house
   Gate: field
   Wizard's lab: alice_house
-items: []
+objects: [dave, eve, zorro]

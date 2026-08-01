@@ -2,5 +2,4 @@ name: Eve
 description: Eve is as beautiful as she is obnoxious.
 portrait: null
 money: 0
-location: red_town
 guards_exits: [eve_house]

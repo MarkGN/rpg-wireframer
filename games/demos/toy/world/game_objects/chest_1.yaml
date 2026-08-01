@@ -5,5 +5,4 @@ ink: chest
 interact_prompt: Open
 inventory: [ruby]
 open: false
-location: cave
 open: false

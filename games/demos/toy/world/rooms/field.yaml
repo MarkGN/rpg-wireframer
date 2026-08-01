@@ -6,3 +6,5 @@ exits:
   Red Town: red_town
 items:
   - flower
+objects:
+  - bob

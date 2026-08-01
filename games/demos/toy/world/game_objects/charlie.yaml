@@ -6,4 +6,3 @@ money: 50
 inventory:
   - lantern
   - sword
-location: red_smith
