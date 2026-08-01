@@ -1,0 +1,4 @@
+name: Bill's house
+description: Den of the super-duper-nerd.
+exits: 
+  outside: route_25

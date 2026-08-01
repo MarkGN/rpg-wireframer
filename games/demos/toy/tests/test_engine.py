@@ -7,6 +7,7 @@ import pytest
 from runners.context_independent_actions import get_context_independent_actions
 from runners.contexts.dialogue import find_ink_path, ink_json_path
 from runners.world import World
+from runners.binder import Binder
 
 
 def get_game_dir() -> str:
@@ -36,7 +37,10 @@ def test_player_can_pick_up_sword():
     world.load_world()
 
     # Whatever your inventory representation is.
-    assert "sword" not in world.world_state["player"]["inventory"]
+
+    assert "sword" not in world.get_state(
+        Binder({"player": world.player_handle}).apply("$player.inventory")
+    )
 
     actions = [
         ("t", "dave"),
@@ -49,7 +53,9 @@ def test_player_can_pick_up_sword():
     for verb, target in actions:
         world.handle_action(verb, target)
 
-    assert "sword" in world.world_state["player"]["inventory"]
+    assert "sword" in world.get_state(
+        Binder({"player": world.player_handle}).apply("$player.inventory")
+    )
 
 
 def test_eve_blocks():

@@ -68,6 +68,8 @@ def validate_game_objects(game_path: Path | str) -> None:
                 )
 
         ink_reference = data.get("ink", object_id)
+        if data.get("abstract", False):
+            continue
         if not isinstance(ink_reference, str):
             raise ValueError(f"Game object {object_id} ink reference must be a string")
         if find_ink_path(ink_reference, dialogue_dir) is None:

@@ -12,7 +12,7 @@ Hello!
 === request
 If you can find me a red flower, I'll teach you how to cast fireball.
 ~ set("quests.alice_flower.stage", 10)
-{has("player.inventory", "flower"):
+{has("$player.inventory", "flower"):
     Yes, that's the one!
     + Trade -> trade
     + Refuse -> refuse
@@ -24,10 +24,10 @@ If you can find me a red flower, I'll teach you how to cast fireball.
 #set portrait alice-happy
 Thanks so much! (takes flower) Now, as promised ...
 ~ set("quests.alice_flower.stage", 100)
-~ remove("player.inventory", "flower")
+~ remove("$player.inventory", "flower")
 ~ add("alice.inventory", "flower")
 (teaches fireball)
-~ add("player.inventory", "fireball")
+~ add("$player.inventory", "fireball")
 Now, let me see this flower ... -> END
 
 === refuse

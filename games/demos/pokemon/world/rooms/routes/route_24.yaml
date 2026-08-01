@@ -1,0 +1,10 @@
+name: Route 24
+description: Cerulean City to Rt. 25.
+exits: 
+  Cerulean City: cerulean
+  Rt. 25: route_25
+  Cave: cave
+objects:
+  w:
+    inherits: water
+    guards_exit: cave

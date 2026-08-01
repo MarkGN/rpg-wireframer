@@ -1,3 +1,4 @@
-template: trainer
+inherits: trainer
+abstract: true
 name: Youngster
 description: A boy.

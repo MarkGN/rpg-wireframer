@@ -18,6 +18,8 @@ You're still a jerk! And Giovanni says I have to practise my waterboarding, so .
 Shoot. Don't tell the Boss. Here's a badge and TM.
 ~ add("$player.inventory", badge)
 ~ add("$player.inventory", "tm_11")
+
+~ remove("cerulean_trashed.objects", "cerulean_cop")
 -> END
 
 == post_victory

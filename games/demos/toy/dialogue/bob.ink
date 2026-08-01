@@ -51,11 +51,11 @@ I'll go back to town. -> END
 
 === lose
 ~ set("bob.is_hostile", false)
-~ temp your_money = get("player.money")
+~ temp your_money = get("$player.money")
 {your_money > 0:
     [Bob takes your {your_money} gold.]
     ~ increase("bob.money", your_money)
-    ~ set("player.money", 0)
+    ~ set("$player.money", 0)
   - else:
     # portrait: bob-sad
     ... I sat around here for this long and you don't even have any money?! Ugh.

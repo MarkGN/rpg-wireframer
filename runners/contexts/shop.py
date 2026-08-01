@@ -22,13 +22,11 @@ class Shop(Context):
         self.inventory = []
         self.npc = npc
         self.line = "Welcome"
+        self.binder = None
 
     def on_enter(self, world: World):
-        self.inventory = world.get_state(
-            Binder({"player": world.player_handle, "self": self.npc}).apply(
-                self.inventory_handle
-            )
-        )
+        self.binder = Binder({"player": world.player_handle, "self": self.npc})
+        self.inventory = world.get_state(self.binder.apply(self.inventory_handle))
 
     def actions(self, world: World):
         quit = [Action(InteractType.QUIT, "Quit")]
@@ -38,11 +36,12 @@ class Shop(Context):
         if verb in {InteractType.QUIT, QUIT}:
             world.pop_context()
         elif verb in {InteractType.BUY, BUY}:
-            money = world.get_state("player.money")
-            price = world.world_state["items"][target]["price"]
+            money = world.get_state(self.binder.apply("$player.money"))
+            price = world.get_state(self.binder.apply("items." + target + ".price"))
+            # price = world.world_state["items"][target]["price"]
             if money >= price:
-                world.set_state("player.money", money - price)
-                world.add_item("player.inventory", target)
+                world.set_state(self.binder.apply("$player.money"), money - price)
+                world.add_item(self.binder.apply("$player.inventory"), target)
                 self.line = "Thank you for your custom."
             else:
                 self.line = "You can't afford it."

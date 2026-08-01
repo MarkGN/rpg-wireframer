@@ -115,11 +115,6 @@ class World:
                 f"Error: player '{self.player_handle}' not found in world/game_objects/."
             )
         pc_data = load_yaml(player_path)
-        self.world_state["player"] = {
-            "name": pc_data.get("name", "Player"),
-            "inventory": list(pc_data.get("inventory", [])),
-            "money": pc_data.get("money", 0),
-        }
 
         location = pc_data["location"]
         if location not in self.world_state["rooms"]:
