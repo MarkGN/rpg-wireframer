@@ -5,6 +5,5 @@ exits:
   Rt. 25: route_25
   Cave: cave
 objects:
-  w:
-    inherits: water
+  - inherits: water
     guards_exit: cave

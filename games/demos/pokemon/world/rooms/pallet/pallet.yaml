@@ -6,3 +6,7 @@ exits:
   Lab: oak_lab
   Rt. 1: route_1
   Rt. 21: route_21
+objects: 
+  - daisy
+  - inherits: water
+    guards_exits: [route_21]

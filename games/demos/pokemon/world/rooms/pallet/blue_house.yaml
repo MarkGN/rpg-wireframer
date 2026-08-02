@@ -2,5 +2,5 @@ name: Blue's house
 description: A one-storey house.
 exits: 
   Town: pallet
-objects:
-  - blue_mom
+objects: []
+# - daisy

@@ -5,6 +5,5 @@ exits:
   Rock tunnel: rock_tunnel
   Power Plant: power
 objects: 
-  - w:
-    template: water
+  - inherits: water
     guards_exits: [power]

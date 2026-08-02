@@ -68,22 +68,82 @@ class World:
             self.world_state["items"][item_id] = data
 
         # Game Objects such as NPCs
-        game_objects: dict[str, dict[str, Any]] = {}
+        raw_game_objects: dict[str, dict[str, Any]] = {}
         for path in sorted(self.game_objects_dir.rglob("*.yaml")):
             npc_id = path.stem
-            data = load_yaml(path)
+            raw_game_objects[npc_id] = load_yaml(path)
 
-            state: dict = {}
-            for key, value in data.items():
-                state[key] = value
+        # Add inline room-defined objects as virtual game objects.
+        for room_id, room_data in self.world_state["rooms"].items():
+            ct = 0
+            for object_entry in room_data.get("objects", []):
+                if isinstance(object_entry, dict):
+                    if len(object_entry) == 1 and isinstance(
+                        next(iter(object_entry.values())), dict
+                    ):
+                        _, object_data = next(iter(object_entry.items()))
+                    else:
+                        object_data = object_entry
+                    if not isinstance(object_data, dict):
+                        sys.exit(
+                            f"Error: inline object entry in room '{room_id}' must be a mapping, got {object_entry!r}."
+                        )
+                    raw_game_objects[f"{room_id}.object{ct}"] = dict(object_data)
+                    ct += 1
 
-            state.setdefault("accosts", False)
-            state.setdefault("dialogue", f"{npc_id}.ink")
-            state.setdefault("inventory", [])
-            state.setdefault("is_visible", True)
-            state.setdefault("money", 0)
+        resolved_game_objects: dict[str, dict[str, Any]] = {}
 
-            game_objects[npc_id] = state
+        def resolve_game_object(
+            object_id: str, lineage: list[str] | None = None
+        ) -> dict[str, Any]:
+            if object_id in resolved_game_objects:
+                return resolved_game_objects[object_id]
+            if lineage is None:
+                lineage = []
+            if object_id in lineage:
+                cycle = " -> ".join(lineage + [object_id])
+                sys.exit(f"Error: instance cycle detected: {cycle}")
+            if object_id not in raw_game_objects:
+                sys.exit(f"Error: object '{object_id}' not found for inheritance.")
+
+            data = raw_game_objects[object_id]
+            instance_parent = data.get("instance")
+            inherits_parent = data.get("inherits")
+            template_parent = data.get("template")
+            parents = [
+                p
+                for p in (instance_parent, inherits_parent, template_parent)
+                if p is not None
+            ]
+            if len(parents) > 1:
+                sys.exit(
+                    f"Error: object '{object_id}' cannot define more than one of 'instance', 'inherits', or 'template'."
+                )
+            parent_id = parents[0] if parents else None
+            if parent_id is not None:
+                parent = resolve_game_object(parent_id, lineage + [object_id])
+                merged: dict[str, Any] = dict(parent)
+                merged.update(data)
+                merged.pop("instance", None)
+                merged.pop("inherits", None)
+                merged.pop("template", None)
+                merged["abstract"] = bool(data.get("abstract", False))
+                data = merged
+            else:
+                data = dict(data)
+
+            data.setdefault("accosts", False)
+            data.setdefault("dialogue", f"{object_id}.ink")
+            data.setdefault("inventory", [])
+            data.setdefault("is_visible", True)
+            data.setdefault("money", 0)
+            data["id"] = object_id
+
+            resolved_game_objects[object_id] = data
+            return data
+
+        for object_id in sorted(raw_game_objects):
+            resolve_game_object(object_id)
 
         # Populate room object references from room definitions first.
         # If the world is still using the old object.location model, infer room
@@ -93,7 +153,7 @@ class World:
             for room_data in self.world_state["rooms"].values()
         )
         if not any_objects_defined:
-            for npc_id, meta in game_objects.items():
+            for npc_id, meta in resolved_game_objects.items():
                 location = meta.pop("location", None)
                 if location is None:
                     continue
@@ -122,21 +182,37 @@ class World:
             # Normalize objects lists for all rooms.
             for room_data in self.world_state["rooms"].values():
                 room_data.setdefault("objects", [])
-            for meta in game_objects.values():
-                meta.pop("location", None)
+
+        # Replace inline room object entries with generated handles.
+        for room_handle, room_data in self.world_state["rooms"].items():
+            normalized_objects: list[str] = []
+            ct = 0
+            for obj_entry in room_data.get("objects", []):
+                if isinstance(obj_entry, str):
+                    normalized_objects.append(obj_entry)
+                elif isinstance(obj_entry, dict):
+                    normalized_objects.append(f"{room_handle}.object{ct}")
+                    ct += 1
+                else:
+                    sys.exit(
+                        f"Error: room '{room_data['name']}' has invalid object entry {obj_entry!r}."
+                    )
+            room_data["objects"] = normalized_objects
 
         # Build the current active game object map from room placement.
         placed_objects: set[str] = set()
-        for room_data in self.world_state["rooms"].values():
+        for room_handle, room_data in self.world_state["rooms"].items():
             for obj_handle in room_data.get("objects", []):
-                if obj_handle not in game_objects:
+                if obj_handle not in resolved_game_objects:
                     sys.exit(
-                        f"Error: room references unknown game object '{obj_handle}'."
+                        f"Error: room {room_data['name']} references unknown game object '{obj_handle}'."
                     )
                 placed_objects.add(obj_handle)
 
         for obj_handle in sorted(placed_objects):
-            self.world_state["game_objects"][obj_handle] = game_objects[obj_handle]
+            self.world_state["game_objects"][obj_handle] = resolved_game_objects[
+                obj_handle
+            ]
 
         # Quests
         for path in sorted(self.quests_dir.rglob("*.yaml")):

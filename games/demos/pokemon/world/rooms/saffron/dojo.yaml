@@ -3,23 +3,19 @@ description: A dojo masquerading as a second gym. It's a simple, sparse space, j
 exits: 
   Town: saffron
 objects:
-  - bb1:
-    inherits: blackbelt
+  - inherits: blackbelt
     team: [machop31, mankey31, primeape31]
     money: 775
     ink: dojo_bb_1
-  - bb2:
-    inherits: blackbelt
+  - inherits: blackbelt
     team: [machop32, machoke32]
     money: 800
     ink: dojo_bb_2
-  - bb3:
-    inherits: blackbelt
+  - inherits: blackbelt
     team: [primeape36]
     money: 900
     ink: dojo_bb_3
-  - bb4:
-    inherits: blackbelt
+  - inherits: blackbelt
     team: [mankey31, mankey31, primeape31]
     money: 775
     ink: dojo_bb_4

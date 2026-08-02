@@ -7,5 +7,5 @@ exits:
 # In the game, there are also some gatehouses.
 objects: 
   - tree:
-    template: cut_tree
+    inherits: cut_tree
     guards_exits: [route_2_mid]

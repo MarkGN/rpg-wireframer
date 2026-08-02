@@ -1,3 +1,3 @@
-template: trainer
+inherits: trainer
 name: Sabrina
 description: A teenage witch.

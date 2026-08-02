@@ -1,3 +1,3 @@
-template: trainer
+inherits: trainer
 name: Erika
 description: Beautiful woman in red and green kimono.

@@ -39,8 +39,51 @@ def validate_game_objects(game_path: Path | str) -> None:
     if not object_paths:
         raise ValueError(f"No game objects found in {objects_dir}")
 
-    for object_id, path in object_paths.items():
-        data = load_yaml(path)
+    resolved_game_objects: dict[str, dict[str, Any]] = {}
+
+    def resolve_game_object(
+        object_id: str, lineage: list[str] | None = None
+    ) -> dict[str, Any]:
+        if object_id in resolved_game_objects:
+            return resolved_game_objects[object_id]
+        if lineage is None:
+            lineage = []
+        if object_id in lineage:
+            cycle = " -> ".join(lineage + [object_id])
+            raise ValueError(f"Game object instance cycle detected: {cycle}")
+        if object_id not in object_paths:
+            raise ValueError(f"Game object '{object_id}' not found for inheritance.")
+
+        data = load_yaml(object_paths[object_id])
+        if "instance" in data:
+            parent_id = data["instance"]
+            parent = resolve_game_object(parent_id, lineage + [object_id])
+            merged: dict[str, Any] = dict(parent)
+            merged.update(data)
+            merged.pop("instance", None)
+            if data.get("abstract", False):
+                merged["abstract"] = True
+            else:
+                merged["abstract"] = False
+            data = merged
+        else:
+            data = dict(data)
+
+        data.setdefault("accosts", False)
+        data.setdefault("dialogue", f"{object_id}.ink")
+        data.setdefault("inventory", [])
+        data.setdefault("is_visible", True)
+        data.setdefault("money", 0)
+
+        resolved_game_objects[object_id] = data
+        return data
+
+    for object_id in sorted(object_paths):
+        raw_data = load_yaml(object_paths[object_id])
+        if raw_data.get("abstract", False) and "instance" not in raw_data:
+            continue
+
+        data = resolve_game_object(object_id)
 
         name = data.get("name")
         if not isinstance(name, str) or not name.strip():
@@ -68,8 +111,6 @@ def validate_game_objects(game_path: Path | str) -> None:
                 )
 
         ink_reference = data.get("ink", object_id)
-        if data.get("abstract", False):
-            continue
         if not isinstance(ink_reference, str):
             raise ValueError(f"Game object {object_id} ink reference must be a string")
         if find_ink_path(ink_reference, dialogue_dir) is None:

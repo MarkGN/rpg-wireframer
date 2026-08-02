@@ -1,3 +1,4 @@
 name: Boulder
 description: A heavy boulder.
 ink: boulder
+interact_prompt: Examine

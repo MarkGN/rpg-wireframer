@@ -45,10 +45,37 @@ def validate_world(game_path: Path | str) -> None:
 
     player_data = load_yaml(player_path)
     start_room = player_data.get("location")
-    if not isinstance(start_room, str) or start_room not in rooms:
-        raise ValueError(
-            f"Player location '{start_room}' is not a valid room in {rooms_dir}"
-        )
+
+    object_handles = {path.stem for path in sorted(game_objects_dir.rglob("*.yaml"))}
+    for room_data in rooms.values():
+        for obj in room_data.get("objects", []) or []:
+            if isinstance(obj, str):
+                object_handles.add(obj)
+            elif isinstance(obj, dict):
+                if len(obj) == 1 and isinstance(next(iter(obj.values())), dict):
+                    obj_handle = next(iter(obj.keys()))
+                    if isinstance(obj_handle, str):
+                        object_handles.add(obj_handle)
+
+    if isinstance(start_room, str) and start_room in rooms:
+        pass
+    else:
+        player_rooms = [
+            room_id
+            for room_id, room_data in rooms.items()
+            if player_handle
+            in [
+                obj if isinstance(obj, str) else next(iter(obj.keys()))
+                for obj in room_data.get("objects", []) or []
+                if isinstance(obj, str) or (isinstance(obj, dict) and len(obj) == 1)
+            ]
+        ]
+        if len(player_rooms) == 1:
+            start_room = player_rooms[0]
+        else:
+            raise ValueError(
+                f"Player location '{start_room}' is not a valid room in {rooms_dir}"
+            )
 
     for path in sorted(game_objects_dir.rglob("*.yaml")):
         object_data = load_yaml(path)
@@ -99,6 +126,52 @@ def validate_world(game_path: Path | str) -> None:
                 )
         else:
             raise ValueError(f"Room {room_id} has invalid exits value {exits!r}")
+
+        objects = room_data.get("objects")
+        if objects is None:
+            continue
+        if not isinstance(objects, list):
+            raise ValueError(f"Room {room_id} has invalid objects value {objects!r}")
+        for obj in objects:
+            if isinstance(obj, str):
+                if obj not in object_handles:
+                    raise ValueError(
+                        f"Room {room_id} references unknown object '{obj}'"
+                    )
+            elif isinstance(obj, dict):
+                if len(obj) == 1 and isinstance(next(iter(obj.values())), dict):
+                    obj_handle, obj_data = next(iter(obj.items()))
+                else:
+                    obj_handle = None
+                    obj_data = obj
+                if obj_handle is not None and not isinstance(obj_handle, str):
+                    raise ValueError(
+                        f"Room {room_id} has invalid inline object handle {obj_handle!r}"
+                    )
+                if not isinstance(obj_data, dict):
+                    raise ValueError(
+                        f"Room {room_id} inline object must be a mapping, got {obj!r}"
+                    )
+                base = obj_data.get("inherits")
+                template = obj_data.get("template")
+                if base is not None and (
+                    not isinstance(base, str) or base not in object_handles
+                ):
+                    raise ValueError(
+                        f"Room {room_id} inline object references unknown base '{base}'"
+                    )
+                if template is not None and (
+                    not isinstance(template, str) or template not in object_handles
+                ):
+                    raise ValueError(
+                        f"Room {room_id} inline object references unknown template '{template}'"
+                    )
+                if base is not None and template is not None:
+                    raise ValueError(
+                        f"Room {room_id} inline object cannot define both 'inherits' and 'template'"
+                    )
+            else:
+                raise ValueError(f"Room {room_id} has invalid object entry {obj!r}")
 
     visited: set[str] = set()
     stack = [start_room]
