@@ -7,7 +7,7 @@ def write_ink(line):
 
     == challenge
     What fool dares challenge the might of the unevolved bug pokemon?!
-    ~ scenario("battle")
+    ~ scenario("trainer")
     -> END
 
     == win

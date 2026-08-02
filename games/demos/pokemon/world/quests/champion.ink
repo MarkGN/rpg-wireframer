@@ -24,7 +24,7 @@
 }
 { get("$lance.final_defeat"):
   -> elite
-  else:
+ - else:
   -> rival
 }
 -> END

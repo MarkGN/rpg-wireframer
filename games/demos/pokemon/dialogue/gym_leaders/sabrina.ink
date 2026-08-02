@@ -1,16 +1,17 @@
 
-~ badge = "marsh_badge"
+VAR badge = "marsh_badge"
 
 { has("$player.inventory", badge):
     -> post_victory
-    else:
-    -> challenge}
+   - else:
+    -> challenge
+}
 
 == challenge
 I've got a question.
 Why does the psychic have the marsh badge and the poison guy the soul badge?
 We should swap.
-~ scenario("battle")
+~ scenario("trainer")
 -> END
 
 == win

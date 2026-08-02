@@ -1,14 +1,14 @@
-
-~ badge = "volcano_badge"
+VAR badge = "boulder_badge"
 
 { has("$player.inventory", badge):
     -> post_victory
-    else:
-    -> challenge}
+    - else:
+    -> challenge
+}
 
 == challenge
 Hey. Let's rock!
-~ scenario("battle")
+~ scenario("trainer")
 -> END
 
 == win

@@ -5,4 +5,4 @@ debug/*
 games/local/*
 games/demos/toy/dialogue/*.ink.json
 .github/copilot-instructions.md
-games/demos/**.ink.json
+games/demos/**/*.ink.json

@@ -1,14 +1,15 @@
 
-~ badge = "rainbow_badge"
+VAR badge = "rainbow_badge"
 
 { has("$player.inventory", badge):
     -> post_victory
-    else:
-    -> challenge}
+   - else:
+    -> challenge
+}
 
 == challenge
 Only girls allowed.
-~ scenario("battle")
+~ scenario("trainer")
 -> END
 
 == win

@@ -1,16 +1,17 @@
 
-~ badge = "cascade_badge"
+VAR badge = "cascade_badge"
 
 { has("$player.inventory", badge):
     -> post_victory
-    else:
-    -> challenge}
+   - else:
+    -> challenge
+}
 
 == challenge
 You're that jerk who totalled my bicycle!
 ... Wait, that was just in the anime?
 You're still a jerk! And Giovanni says I have to practise my waterboarding, so ...
-~ scenario("battle")
+~ scenario("trainer")
 -> END
 
 == win

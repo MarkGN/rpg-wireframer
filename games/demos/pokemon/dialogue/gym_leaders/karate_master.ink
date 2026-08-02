@@ -1,11 +1,12 @@
 { get("$self.money") == 0:
     -> post_victory
-    else:
-    -> challenge}
+   - else:
+    -> challenge
+}
 
 == challenge
 It's punch time!
-~ scenario("battle")
+~ scenario("trainer")
 -> END
 
 == win

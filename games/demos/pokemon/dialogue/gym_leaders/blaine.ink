@@ -1,12 +1,13 @@
 { has("$player.inventory", volcano_badge"):
     -> post_victory
-    else:
-    -> challenge}
+   - else:
+    -> challenge
+}
 
 == challenge
 Wahaha!
 Hope you have burn heal!
-~ scenario("battle")
+~ scenario("trainer")
 -> END
 
 == win

@@ -1,17 +1,18 @@
 
-~ badge = "soul_badge"
+VAR badge = "soul_badge"
 
 { has("$player.inventory", badge):
     -> post_victory
-    else:
-    -> challenge}
+   - else:
+    -> challenge
+}
 
 == challenge
 The true ninja never sleeps.
 He just drinks endless coffee.
 So much coffee.
 So, so much coffee.
-~ scenario("battle")
+~ scenario("trainer")
 -> END
 
 == win

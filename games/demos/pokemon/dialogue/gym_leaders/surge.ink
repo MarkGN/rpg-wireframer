@@ -1,14 +1,15 @@
 
-~ badge = "thunder_badge"
+VAR badge = "thunder_badge"
 
 { has("$player.inventory", badge):
     -> post_victory
-    else:
-    -> challenge}
+   - else:
+    -> challenge
+}
 
 == challenge
 Are you man enough to fight me?
-~ scenario("battle")
+~ scenario("trainer")
 -> END
 
 == win
