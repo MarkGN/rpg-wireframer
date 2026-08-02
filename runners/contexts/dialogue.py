@@ -10,6 +10,9 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Any
+
+import yaml
 from ..action import Action, InteractType
 from ..binder import Binder
 from ..context import Context
@@ -29,6 +32,7 @@ class Dialogue(Context):
         self.story: Story = None
         self.buffered_text: str | None = None
         self.buffered_speaker: str | None = None
+        self.external_texts: list[str] = []
 
     def on_enter(self, world: World) -> None:
         """
@@ -153,6 +157,13 @@ class Dialogue(Context):
         self.story.BindExternalFunction("parse_inventory", ext_parse_inventory)
         self.story.BindExternalFunction("speaker", ext_speaker)
 
+        custom_externals = load_custom_externals_definitions(dialogue_dir)
+        for name, arg_count in custom_externals.items():
+            self.story.BindExternalFunction(
+                name,
+                make_custom_external_function(name, arg_count, self),
+            )
+
         self.step_story()
 
     def step_story(self):
@@ -168,6 +179,9 @@ class Dialogue(Context):
             while self.story.canContinue:
                 old_speaker = self.current_speaker
                 text = self.story.Continue()
+                if self.external_texts:
+                    parts.extend(self.external_texts)
+                    self.external_texts = []
                 if text:
                     text = text.strip()
                     if text:
@@ -181,6 +195,9 @@ class Dialogue(Context):
                                 parts.append(text)
                         else:
                             parts.append(text)
+                if self.external_texts and not self.story.canContinue:
+                    parts.extend(self.external_texts)
+                    self.external_texts = []
 
             self.last_text = "\n".join(parts)
         except inkpython.engine.story_exception.StoryException:
@@ -248,8 +265,28 @@ def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
     temp_path = None
 
     globals_path = dialogue_dir / "globals.ink"
-    if globals_path.exists():
-        include_path = os.path.relpath(globals_path, start=ink_path.parent)
+    custom_externals_path = dialogue_dir / "custom_externals.yaml"
+    custom_externals = load_custom_externals_definitions(dialogue_dir)
+    compile_needed = not json_path.exists()
+    if not compile_needed:
+        source_mtime = ink_path.stat().st_mtime
+        json_mtime = json_path.stat().st_mtime
+        if source_mtime > json_mtime:
+            compile_needed = True
+        elif globals_path.exists() and globals_path.stat().st_mtime > json_mtime:
+            compile_needed = True
+        elif (
+            custom_externals_path.exists()
+            and custom_externals_path.stat().st_mtime > json_mtime
+        ):
+            compile_needed = True
+
+    if globals_path.exists() or custom_externals:
+        include_path = (
+            os.path.relpath(globals_path, start=ink_path.parent)
+            if globals_path.exists()
+            else None
+        )
         temp_file = tempfile.NamedTemporaryFile(
             dir=ink_path.parent,
             suffix=".ink",
@@ -258,16 +295,18 @@ def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
             encoding="utf-8",
         )
         try:
-            temp_file.write(f"INCLUDE {include_path}\n")
+            if include_path is not None:
+                temp_file.write(f"INCLUDE {include_path}\n")
+            if custom_externals:
+                for name, arg_count in custom_externals.items():
+                    args = ", ".join(f"arg{i}" for i in range(arg_count))
+                    temp_file.write(f"EXTERNAL {name}({args})\n")
             temp_file.write(ink_path.read_text(encoding="utf-8"))
             temp_file.close()
             temp_path = Path(temp_file.name)
             source_path = temp_path
 
-            if (
-                not json_path.exists()
-                or ink_path.stat().st_mtime > json_path.stat().st_mtime
-            ):
+            if compile_needed:
                 result = subprocess.run(
                     ["inklecate", "-o", str(json_path), str(source_path)],
                     capture_output=True,
@@ -279,10 +318,7 @@ def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
             if temp_path is not None:
                 temp_path.unlink(missing_ok=True)
     else:
-        if (
-            not json_path.exists()
-            or ink_path.stat().st_mtime > json_path.stat().st_mtime
-        ):
+        if compile_needed:
             result = subprocess.run(
                 ["inklecate", "-o", str(json_path), str(source_path)],
                 capture_output=True,
@@ -296,3 +332,52 @@ def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
     ), f"Bad .ink: {ink_filename}, {result.stdout}, {result.stderr}"
 
     return json_path
+
+
+def load_custom_externals_definitions(dialogue_dir: Path) -> dict[str, int]:
+    custom_path = dialogue_dir / "custom_externals.yaml"
+    if not custom_path.exists():
+        return {}
+
+    with open(custom_path, encoding="utf-8") as f:
+        raw = yaml.safe_load(f) or {}
+
+    if not isinstance(raw, dict):
+        raise ValueError(f"Expected mapping in {custom_path}, got {type(raw).__name__}")
+
+    custom_externals: dict[str, int] = {}
+    for name, spec in raw.items():
+        if not isinstance(name, str):
+            raise ValueError(f"Invalid custom external name {name!r} in {custom_path}")
+        if isinstance(spec, dict) and "args" in spec:
+            arg_count = spec["args"]
+        elif isinstance(spec, int):
+            arg_count = spec
+        else:
+            print("jing", raw, spec, isinstance(spec, dict), "args" in spec)
+            raise ValueError(
+                f"Invalid custom external spec for {name!r} in {custom_path}: {spec!r}"
+            )
+        if not isinstance(arg_count, int) or arg_count < 0:
+            raise ValueError(
+                f"Invalid arg count for {name!r} in {custom_path}: {arg_count!r}"
+            )
+        custom_externals[name] = arg_count
+    return custom_externals
+
+
+def make_custom_external_function(name: str, arg_count: int, dialogue: "Dialogue"):
+    def ext(*args: Any):
+        if len(args) != arg_count:
+            raise TypeError(
+                f"{name}() takes {arg_count} positional arguments but {len(args)} were given"
+            )
+        formatted_args: list[str] = []
+        for arg in args:
+            if isinstance(arg, str):
+                formatted_args.append(f'"{arg}"')
+            else:
+                formatted_args.append(str(arg))
+        dialogue.external_texts.append(f"~ {name}({', '.join(formatted_args)})")
+
+    return ext

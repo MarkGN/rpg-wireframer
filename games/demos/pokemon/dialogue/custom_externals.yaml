@@ -1,17 +1,13 @@
 emotion:
-  - args: 1
+  args: 1
 # show a certain emotion
 
 poke_heal:
-  - args: 0
+  args: 0
 # full heal your party
 
-speaker:
-  - args: 1
-# change portrait
-
 victory:
-  - args: 0
+  args: 0
 # take all money from the calling trainer
 # at present, defeat is implemented by taking all their money;
 # I could instead give them an is_defeated flag and set that here too.
