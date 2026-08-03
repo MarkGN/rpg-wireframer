@@ -72,20 +72,20 @@ class Dialogue(Context):
 
         # --- register external functions ---
 
-        def ext_get(key):
+        def ext_get(key: str):
             return world.get_state(binder(key))
 
-        def ext_set(key, value):
+        def ext_set(key: str, value: Any):
             world.set_state(binder(key), value)
 
-        def ext_increase(key, value):
+        def ext_increase(key: str, value: int):
             terms = binder(key).split(".")
             d = world.world_state
             for term in terms[:-1]:
                 d = d[term]
             d[terms[-1]] += value
 
-        def ext_transfer(d, r, value) -> None:
+        def ext_transfer(d: str, r: str, value: int) -> None:
             donor = binder(d)
             recipient = binder(r)
             if isinstance(value, list):
@@ -100,17 +100,17 @@ class Dialogue(Context):
             recipient = binder("$player.inventory")
             world.transfer_all(donor, recipient)
 
-        def ext_has_item(key, item) -> int:
+        def ext_has_item(key: str, item: str) -> int:
             terms = binder(key).split(".")
             value = world.world_state
             for term in terms:
                 value = value[term]
             return item in value
 
-        def ext_add_item(key, item):
+        def ext_add_item(key: str, item: str):
             world.add_item(binder(key), item)
 
-        def ext_remove_item(key, item):
+        def ext_remove_item(key: str, item: str):
             terms = binder(key).split(".")
             d = world.world_state
             for term in terms[:-1]:
@@ -118,13 +118,13 @@ class Dialogue(Context):
             if item in d[terms[-1]]:
                 d[terms[-1]].remove(item)
 
-        def ext_at_npc(npc):
+        def ext_at_npc(npc: str):
             return npc in world.npcs_in_room()
 
-        def ext_move_npc(npc, source_room, destination_room):
+        def ext_move_npc(npc: str, source_room: str, destination_room: str):
             world.move_object(npc, source_room, destination_room)
 
-        def ext_scenario(script):
+        def ext_scenario(script: str):
             world.push_scenario(script=script, npc=self.npc)
             return
 
