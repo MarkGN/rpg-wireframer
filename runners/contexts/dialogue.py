@@ -327,9 +327,31 @@ def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
         else:
             result = None
 
-    assert (
-        result is None or result.returncode == 0
-    ), f"Bad .ink: {ink_filename}, {result.stdout}, {result.stderr}"
+    if result is not None and result.returncode != 0:
+        err_output = (result.stdout.strip() + "\n" + result.stderr.strip()).strip()
+        import re
+
+        match = re.search(r"line\s+(\d+)", err_output, re.IGNORECASE)
+        prepended_count = (1 if globals_path.exists() else 0) + len(custom_externals)
+        if match:
+            raw_line = int(match.group(1))
+            line_no = max(1, raw_line - prepended_count)
+        else:
+            line_no = 1
+
+        ink_path_obj = find_ink_path(ink_filename, dialogue_dir)
+        bad_code = ""
+        if ink_path_obj and ink_path_obj.exists():
+            lines = ink_path_obj.read_text(encoding="utf-8").splitlines()
+            if 1 <= line_no <= len(lines):
+                bad_code = lines[line_no - 1].strip()
+
+        diag = (
+            f"Error compiling Ink file '{ink_filename}' at line {line_no}:\n"
+            f"  Line {line_no}: {bad_code}\n"
+            f"Diagnostics: {err_output}"
+        )
+        raise ValueError(diag)
 
     return json_path
 

@@ -1,5 +1,4 @@
-name: Viridian Forest
-description: So many weedles.
+name: Pokemon Mansion
+description: A huge abandoned mansion, overrun with horse pokemon, famed for their love of enclosed spaces.
 exits: 
-  Rt. 2 South: route_2_south
-  Rt. 2 North: route_2_north
+  Cinnabar Island: cinnabar

@@ -243,3 +243,51 @@ def test_check_block_file_pointer():
 
     blocking = world.check_block("exits", "Red house")
     assert blocking == "guard"
+
+
+def test_dialogue_bad_external_call_returns_line_number():
+    game_dir = get_game_dir()
+    world = World(Path(f"{game_dir}"))
+    world.load_world()
+
+    dialogue_dir = Path(game_dir) / "dialogue"
+    bad_ink_file = dialogue_dir / "bad_call_test.ink"
+    bad_ink_file.write_text(
+        "Hello world\n~ increase('non_existent_object.money', 5)\n-> END\n",
+        encoding="utf-8",
+    )
+
+    try:
+        world.world_state["game_objects"]["test_npc"] = {
+            "name": "Test NPC",
+            "ink": "bad_call_test",
+        }
+        world.push_context("dialogue", npc="test_npc")
+    except Exception as exc:
+        err_msg = str(exc)
+        assert "line 2" in err_msg.lower()
+        assert "increase" in err_msg
+    finally:
+        bad_ink_file.unlink(missing_ok=True)
+        json_file = dialogue_dir / "bad_call_test.ink.json"
+        json_file.unlink(missing_ok=True)
+
+
+def test_dialogue_malformed_ink_returns_line_number():
+    game_dir = get_game_dir()
+    dialogue_dir = Path(game_dir) / "dialogue"
+    bad_ink_file = dialogue_dir / "malformed_test.ink"
+    bad_ink_file.write_text("Hello world\n-> non_existent_knot\n", encoding="utf-8")
+
+    try:
+        from runners.contexts.dialogue import ink_json_path
+
+        ink_json_path("malformed_test.ink", dialogue_dir)
+    except Exception as exc:
+        err_msg = str(exc)
+        assert "line 2" in err_msg.lower()
+        assert "non_existent_knot" in err_msg
+    finally:
+        bad_ink_file.unlink(missing_ok=True)
+        json_file = dialogue_dir / "malformed_test.ink.json"
+        json_file.unlink(missing_ok=True)

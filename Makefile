@@ -1,6 +1,6 @@
 GAME ?= games/demos/toy
 
-.PHONY: test run lint format validate-rooms validate
+.PHONY: test run lint format validate-rooms validate export-dot
 
 test:
 	PYTHONPATH=. python -m pytest $(GAME)
@@ -15,6 +15,9 @@ validate-game-object:
 	PYTHONPATH=. python -m validate.game_objects $(GAME)
 
 validate: validate-rooms validate-game-object
+
+export-dot:
+	PYTHONPATH=. python export/export_rooms_to_dot.py $(GAME)
 
 lint:
 	ruff check .

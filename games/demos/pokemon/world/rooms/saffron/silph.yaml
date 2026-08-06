@@ -1,0 +1,7 @@
+name: Silph Corporation building
+description: An eleven-storey tower with a well-decorated but mazelike interior.
+# All 11 storeys exist, but that's more of a level-design thing than a WF thing.
+exits: 
+  Town: saffron
+objects: []
+# Actually a whole lot of Rocket henchmen.
