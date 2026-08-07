@@ -1,15 +1,7 @@
 name: Route 2 Mid
 description: Viridian City to Pewter Town
 exits: 
-  Rt 2 North: route_2_north
-  Rt 2 South: route_2_south
+  Rt 2 North: route_2_high_tree
+  Rt 2 South: route_2_low_tree
   Diglett's Cave: diglett
   Trade House: route_2_trade
-# In the game, there are also some gatehouses.
-objects: 
-  - tree:
-    inherits: cut_tree
-    guards_exits: [route_2_north]
-  - tree:
-    inherits: cut_tree
-    guards_exits: [route_2_south]

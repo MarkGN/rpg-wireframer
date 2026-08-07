@@ -15,7 +15,8 @@ I have a BoulderBadge.
 Oh. Well --
 ~speaker("$player")
 So how about you mind your damn business?
-~ set("$self.guards_exits", "")
+~ set("$self.accosts", false)
+~ move("$player", "$self_room")
 -> END
 
 == snippy

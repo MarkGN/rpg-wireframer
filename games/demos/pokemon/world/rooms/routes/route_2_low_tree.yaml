@@ -1,0 +1,8 @@
+name: Route 2 Low Tree
+description: Viridian City to Pewter Town
+exits: 
+  Rt 2 Mid: route_2_mid
+  Rt 2 South: route_2_south
+objects:
+  - tree:
+    inherits: cut_tree

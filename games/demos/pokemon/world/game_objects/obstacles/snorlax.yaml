@@ -1,3 +1,4 @@
 name: Snorlax
 description: A fat lazy sack of fat, and yet still one of the game's stronger mons.
 interact_prompt: Examine
+accosts: true

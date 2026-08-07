@@ -1,4 +1,4 @@
 name: CUTtable tree
 description: A tree.
-ink: cut_tree
 interact_prompt: Examine
+accosts: true

@@ -6,5 +6,5 @@ It's a boulder blocking your path.
 
 == push
 You push it out of the way.
-~ remove("current_room.objects", "$self")
+~ move("$player", "$self_room")
 -> END

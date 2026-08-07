@@ -3,8 +3,4 @@ description: Viridian City to Pewter Town, with a detour via the forest.
 exits: 
   Pewter Town: pewter
   Viridian Forest: forest
-  Rt 2 Middle: route_2_mid
-objects: 
-  - tree:
-    inherits: cut_tree
-    guards_exits: [route_2_mid]
+  Rt 2 Middle: route_2_high_tree

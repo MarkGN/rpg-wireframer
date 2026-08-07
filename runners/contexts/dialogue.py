@@ -67,6 +67,7 @@ class Dialogue(Context):
                     "player": world.player_handle,
                     "self": self.npc,
                     "current_room": world.current_room,
+                    "self_room": world.find_npc(self.npc)
                 }
             ).apply(key)
 

@@ -318,6 +318,16 @@ class World:
                 present.append(npc_id)
         return present
 
+    # TODO start with current location, then fan out by exits: that's usually faster
+    def find_npc(self, npc) -> str:
+        candidate_rooms = [key for (key, val) in self.world_state["rooms"].items() if npc in val["objects"]]
+        if candidate_rooms:
+            return candidate_rooms[0]
+        else:
+            sys.exit(
+                        f"Error: object '{npc}' not found"
+                    )
+
     def display_room(self) -> dict[str, Any]:
         output: dict[str, Any] = dict()
         room = self.world_state["rooms"][self.current_room]

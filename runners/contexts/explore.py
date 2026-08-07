@@ -44,8 +44,8 @@ class Explore(Context):
                 world.check_quest_triggers("enter_room", destination)
                 accosting = world.check_accost()
                 if accosting:
-                    world.push_context("dialogue", npc=accosting)
                     world.move_object(world.player_handle, world.current_room, previous)
+                    world.push_context("dialogue", npc=accosting)
                     return
             else:
                 return ValueError(f"Invalid action: {verb} {target}")

@@ -6,5 +6,5 @@ You can't swim because you're 10 and also not very bright.
 
 == surf
 You surf.
-~ set("$self.guards_exits", "")
+~ move("$player", "$self_room")
 -> END

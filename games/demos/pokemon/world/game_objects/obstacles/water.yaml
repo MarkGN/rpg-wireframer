@@ -2,3 +2,4 @@ name: Water
 description: A body of water. You can't swim.
 ink: surfable
 interact_prompt: Examine
+accosts: true

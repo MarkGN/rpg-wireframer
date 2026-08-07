@@ -6,5 +6,5 @@ It's a tree blocking your path.
 
 == cut
 You cut it down.
-~ remove("current_room.objects", "$self")
+~ move("$player", "$self_room")
 -> END
