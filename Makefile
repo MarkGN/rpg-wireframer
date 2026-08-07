@@ -1,6 +1,6 @@
 GAME ?= games/demos/toy
 
-.PHONY: test run lint format validate-rooms validate export-dot
+.PHONY: test run lint validate-rooms validate export-dot
 
 test:
 	PYTHONPATH=. python -m pytest $(GAME)
@@ -21,9 +21,6 @@ export-dot:
 
 lint:
 	ruff check .
-
-format:
-	black .
 
 typecheck:
 	PYTHONPATH=. mypy . --ignore-missing-imports
