@@ -39,12 +39,13 @@ class Explore(Context):
                     world.push_context("dialogue", npc=blocking)
                     return
                 destination = exits[target]
+                previous = world.current_room
                 world.move_object(world.player_handle, world.current_room, destination)
-                world.current_room = destination
-                world.check_quest_triggers("enter_room", world.current_room)
+                world.check_quest_triggers("enter_room", destination)
                 accosting = world.check_accost()
                 if accosting:
                     world.push_context("dialogue", npc=accosting)
+                    world.move_object(world.player_handle, world.current_room, previous)
                     return
             else:
                 return ValueError(f"Invalid action: {verb} {target}")

@@ -304,6 +304,8 @@ class World:
             from_objects.remove(npc_id)
         if npc_id not in to_objects:
             to_objects.append(npc_id)
+        if npc_id == self.player_handle:
+            self.current_room = to_room
 
     def npcs_in_room(self) -> list[str]:
         """Return npc_ids currently present in the active room."""

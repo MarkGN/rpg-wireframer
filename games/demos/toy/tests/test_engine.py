@@ -47,6 +47,7 @@ def test_player_can_pick_up_sword():
         ("c", "-continue-"),
         ("c", "end dialogue"),
         ("g", "Blacksmith"),
+        ("t", "charlie"),
         ("c", "Buy"),
         ("b", "sword"),
     ]
