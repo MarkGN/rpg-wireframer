@@ -76,7 +76,6 @@ class World:
         # Add inline room-defined objects as virtual game objects.
         for room_id, room_data in self.world_state["rooms"].items():
             ct = 0
-            print(room_id, room_data)
             for object_entry in room_data.get("objects", []):
                 if isinstance(object_entry, dict):
                     if len(object_entry) == 1 and isinstance(
@@ -324,11 +323,12 @@ class World:
     def find_npc(self, npc) -> str:
         candidate_rooms = [key for (key, val) in self.world_state["rooms"].items() if npc in val["objects"]]
         if candidate_rooms:
+            print("finder", candidate_rooms)
             return candidate_rooms[0]
         else:
             sys.exit(
-                        f"Error: object '{npc}' not found"
-                    )
+                f"Error: object {npc} not found"
+            )
 
     def display_room(self) -> dict[str, Any]:
         output: dict[str, Any] = dict()

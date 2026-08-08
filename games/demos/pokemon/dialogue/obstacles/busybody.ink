@@ -16,7 +16,7 @@ Oh. Well --
 ~speaker("$player")
 So how about you mind your damn business?
 ~ set("$self.accosts", 0)
-~ move("$player", "rooms.pewter", "rooms.pewter_busybody")
+~ move("$player", "rooms.$current_room", "rooms.$npc_room")
 -> END
 
 == snippy

@@ -62,13 +62,12 @@ class Dialogue(Context):
         self.story = Story(story_data)
 
         def binder(key):
-            print(world.find_npc(self.npc))
             return Binder(
                 {
                     "player": world.player_handle,
                     "self": self.npc,
                     "current_room": world.current_room,
-                    "self_room": world.find_npc(self.npc)
+                    "npc_room": world.find_npc(self.npc)
                 }
             ).apply(key)
 
@@ -124,6 +123,7 @@ class Dialogue(Context):
             return npc in world.npcs_in_room()
 
         def ext_move_npc(npc: str, source_room: str, destination_room: str):
+            print("dialogic", (binder(npc).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1]), destination_room, world.find_npc(self.npc), binder("rooms.$self_room"))
             world.move_object(binder(npc).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1])
 
         def ext_scenario(script: str):
@@ -378,7 +378,6 @@ def load_custom_externals_definitions(dialogue_dir: Path) -> dict[str, int]:
         elif isinstance(spec, int):
             arg_count = spec
         else:
-            print("jing", raw, spec, isinstance(spec, dict), "args" in spec)
             raise ValueError(
                 f"Invalid custom external spec for {name!r} in {custom_path}: {spec!r}"
             )

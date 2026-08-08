@@ -6,5 +6,5 @@ You can't swim because you're 10 and also not very bright.
 
 == surf
 You surf.
-~ move("$player", "$self_room")
+~ move("$player", "rooms.$current_room", "rooms.$npc_room")
 -> END

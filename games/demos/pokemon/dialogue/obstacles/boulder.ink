@@ -6,5 +6,5 @@ It's a boulder blocking your path.
 
 == push
 You push it out of the way.
-~ move("$player", "$self_room")
+~ move("$player", "rooms.$current_room", "rooms.$npc_room")
 -> END

@@ -2,6 +2,5 @@ name: Route 11
 description: Vermilion City to Rt. 12.
 exits: 
   Vermilion City: vermilion
-  Rt. 12: route_12
-  Rt. 12 South: route_12_south
+  Rt. 12: route_12_snorlax
   Diglett's Cave: diglett

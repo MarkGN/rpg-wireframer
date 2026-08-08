@@ -1,0 +1,8 @@
+name: Route 12 Snorlax
+description: A chunk of bridge with a Snorlax sleeping on it.
+exits: 
+  Rt. 11: route_11
+  Rt. 12 South: route_12_south
+  Rt. 12 North: route_12
+items:
+  - snorlax
