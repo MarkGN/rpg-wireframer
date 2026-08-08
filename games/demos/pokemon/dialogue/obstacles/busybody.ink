@@ -1,4 +1,4 @@
-{ get("$self.passed"):
+{ not get("$self.accosts"):
   -> snippy
 }
 
@@ -15,8 +15,8 @@ I have a BoulderBadge.
 Oh. Well --
 ~speaker("$player")
 So how about you mind your damn business?
-~ set("$self.accosts", false)
-~ move("$player", "$self_room")
+~ set("$self.accosts", 0)
+~ move("$player", "rooms.pewter", "rooms.pewter_busybody")
 -> END
 
 == snippy

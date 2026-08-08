@@ -62,6 +62,7 @@ class Dialogue(Context):
         self.story = Story(story_data)
 
         def binder(key):
+            print(world.find_npc(self.npc))
             return Binder(
                 {
                     "player": world.player_handle,
@@ -123,7 +124,7 @@ class Dialogue(Context):
             return npc in world.npcs_in_room()
 
         def ext_move_npc(npc: str, source_room: str, destination_room: str):
-            world.move_object(npc, source_room, destination_room)
+            world.move_object(binder(npc).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1])
 
         def ext_scenario(script: str):
             world.push_scenario(script=script, npc=self.npc)

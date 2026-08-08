@@ -7,6 +7,4 @@ exits:
   Museum: pewter_museum
   Rt. 2: route_2_north
   # TODO add speech house, nidoran house, second level to museum
-  Rt. 3: route_3
-objects:
-  - busybody
+  Rt. 3: pewter_busybody

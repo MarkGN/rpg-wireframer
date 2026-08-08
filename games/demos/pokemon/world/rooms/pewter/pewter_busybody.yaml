@@ -1,4 +1,7 @@
-name: Pewter City Museum
-description: A museum.
+name: Busybody area
+description: A patch of soil in front of a jackass.
 exits: 
   Town: pewter
+  Rt. 3: route_3
+objects:
+  - busybody

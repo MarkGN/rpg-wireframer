@@ -11,7 +11,7 @@ def resolve_path(path: str) -> str:
         "game_objects",
         "global",
     }
-    first = path.split(".", 1)[0]
+    first = path.split(".")[0]
     if first in roots:
         return path
     return f"game_objects.{path}"
@@ -35,9 +35,12 @@ class Binder:
             return [self.apply(item) for item in value]
 
         if isinstance(value, str):
+            print(value)
             value = resolve_path(value)
+            print(value)
             for name, replacement in self.bindings.items():
                 value = value.replace(f"${name}", replacement)
+            print(value)
             return value
 
         # ints, bools, None, etc.

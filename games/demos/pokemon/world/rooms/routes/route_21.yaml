@@ -4,4 +4,5 @@ exits:
   Pallet Town: pallet
   Cinnabar Island: cinnabar
 objects:
-  
+  - w:
+    inherits: water

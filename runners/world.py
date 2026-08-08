@@ -76,6 +76,7 @@ class World:
         # Add inline room-defined objects as virtual game objects.
         for room_id, room_data in self.world_state["rooms"].items():
             ct = 0
+            print(room_id, room_data)
             for object_entry in room_data.get("objects", []):
                 if isinstance(object_entry, dict):
                     if len(object_entry) == 1 and isinstance(
@@ -293,9 +294,9 @@ class World:
 
     def move_object(self, npc_id: str, from_room: str, to_room: str) -> None:
         if from_room not in self.world_state["rooms"]:
-            raise ValueError(f"Unknown room '{from_room}'")
+            raise ValueError(f"Unknown room {from_room}")
         if to_room not in self.world_state["rooms"]:
-            raise ValueError(f"Unknown room '{to_room}'")
+            raise ValueError(f"Unknown room {to_room}")
 
         from_objects = self.world_state["rooms"][from_room].setdefault("objects", [])
         to_objects = self.world_state["rooms"][to_room].setdefault("objects", [])
@@ -306,7 +307,8 @@ class World:
             to_objects.append(npc_id)
         if npc_id == self.player_handle:
             self.current_room = to_room
-
+        print(from_room, to_room, npc_id, self.player_handle)
+        
     def npcs_in_room(self) -> list[str]:
         """Return npc_ids currently present in the active room."""
         present = []
