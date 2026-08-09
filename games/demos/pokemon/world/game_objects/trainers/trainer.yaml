@@ -1,3 +1,4 @@
 name: Trainer
 description: A wannabe Pokemon Master.
 abstract: true
+beaten: false

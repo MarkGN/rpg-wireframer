@@ -7,7 +7,7 @@ matching the hand-written format (see blaine.ink) used by the game's
 dialogue system.
 
 Usage:
-    python3 csv_to_ink.py gym_leader_dialogues.csv -o output_dir/
+    python3 gym_csv_to_ink.py gym_leader_dialogues.csv -o output_dir/
 """
 
 import argparse

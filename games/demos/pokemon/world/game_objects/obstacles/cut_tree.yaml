@@ -2,3 +2,4 @@ name: CUTtable tree
 description: A tree.
 interact_prompt: Examine
 accosts: true
+ink: cut_tree

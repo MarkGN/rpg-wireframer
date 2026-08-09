@@ -130,9 +130,9 @@ def test_validate_world_accepts_inline_objects(tmp_path: Path) -> None:
     validate_world(tmp_path)
 
     world = World(tmp_path)
-    assert world.world_state["game_objects"]["start.object0"]["name"] == "Fridge"
-    assert world.world_state["game_objects"]["start.object0"]["inventory"] == ["milk"]
-    assert world.display_room()["npcs"] == ["start.object0"]
+    assert world.world_state["game_objects"]["start-object0"]["name"] == "Fridge"
+    assert world.world_state["game_objects"]["start-object0"]["inventory"] == ["milk"]
+    assert world.display_room()["npcs"] == ["start-object0"]
 
 
 def test_validate_game_objects_requires_metadata_and_dialogue(tmp_path: Path) -> None:

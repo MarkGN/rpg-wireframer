@@ -3,3 +3,5 @@ description: Here we go.
 exits: 
   Rt. 22: route_22
   Rt. 23: route_23
+objects:
+  - doorman

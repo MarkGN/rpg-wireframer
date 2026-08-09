@@ -1,0 +1,7 @@
+name: Route 10 Moat
+description: Water between Rt. 10 and the power plant.
+exits: 
+  Rt. 10: route_10
+  Power Plant: power
+objects: 
+  - w: water

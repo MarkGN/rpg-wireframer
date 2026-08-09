@@ -3,7 +3,4 @@ description: Rt. 9 to Power Plant.
 exits: 
   Rt. 9: route_9
   Rock tunnel: rock_tunnel
-  Power Plant: power
-objects: 
-  - inherits: water
-    guards_exits: [power]
+  Power Plant: route_10_moat

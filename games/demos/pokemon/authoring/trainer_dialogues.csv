@@ -1,6 +1,6 @@
-id, challenge, win, post_victory
-vf_bug1, What fool dares challenge the might of the unevolved bug pokemon?!, Huh. These are actually kind of underwhelming., I have such a dumb shtick.
-vf_bug2, Getting poisoned stinks.\nTo wit:, Hmm. So much for that theory., Or maybe what I need is just more poison?
-vf_bug3, What do you think of my evolved bugs?, "You don't think much, apparently.", Maybe they still need more evolution.
-bug4, I bet you're getting pretty sick of bugs by now!, My only regret is ... not catching more bugs ..., I take solace in the fact there are always more bugs.
-bug5, Did you see that Mew just now?, Wow, you're pretty tough!, "I guess I should focus on what really matters, bugs, instead of chasing after things that definitely don't exist."
+id, challenge, win, post_victory, lose
+vf_bug1, What fool dares challenge the might of the unevolved bug pokemon?!, Huh. These are actually kind of underwhelming., I have such a dumb shtick., Bwahaha! Get bugged!
+vf_bug2, Getting poisoned stinks.\nTo wit:, Hmm. So much for that theory., Or maybe what I need is just more poison?, See? Poison is busted!
+vf_bug3, What do you think of my evolved bugs?, "You don't think much, apparently.", Maybe they still need more evolution., Like they say: evolution's the solution if you wanna win.
+bug4, I bet you're getting pretty sick of bugs by now!, My only regret is ... not catching more bugs ..., I take solace in the fact there are always more bugs., The bugs aren't getting any less annoying!
+bug5, Did you see that Mew just now?, "Wow, you're pretty tough!", "I guess I should focus on what really matters, bugs, instead of chasing after things that definitely don't exist.", "I wonder who's stronger, Mew or my bugs?"

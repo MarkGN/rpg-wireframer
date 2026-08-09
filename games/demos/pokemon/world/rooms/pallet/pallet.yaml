@@ -8,5 +8,3 @@ exits:
   Rt. 21: route_21
 objects: 
   - daisy
-  - inherits: water
-    guards_exits: [route_21]

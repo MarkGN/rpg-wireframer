@@ -1,5 +1,4 @@
 name: Karen (male)
 description: A guy with a bowl cut and a really punchable face.
 passed: false
-# guards_exits: [route_3]
 accosts: true

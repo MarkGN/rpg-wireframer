@@ -88,7 +88,7 @@ class World:
                         sys.exit(
                             f"Error: inline object entry in room '{room_id}' must be a mapping, got {object_entry!r}."
                         )
-                    raw_game_objects[f"{room_id}.object{ct}"] = dict(object_data)
+                    raw_game_objects[f"{room_id}-object{ct}"] = dict(object_data)
                     ct += 1
 
         resolved_game_objects: dict[str, dict[str, Any]] = {}
@@ -191,7 +191,7 @@ class World:
                 if isinstance(obj_entry, str):
                     normalized_objects.append(obj_entry)
                 elif isinstance(obj_entry, dict):
-                    normalized_objects.append(f"{room_handle}.object{ct}")
+                    normalized_objects.append(f"{room_handle}-object{ct}")
                     ct += 1
                 else:
                     sys.exit(
@@ -260,6 +260,7 @@ class World:
     def get_state(self, variable):
         terms = variable.split(".")
         value = self.world_state
+        print("akwrgt", variable)
         for term in terms:
             index = int(term) if term.isdigit() else term
             value = value[index]

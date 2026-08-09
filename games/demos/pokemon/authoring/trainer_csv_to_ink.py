@@ -2,12 +2,12 @@
 """
 csv_to_ink.py
 
-Converts a gym-leader dialogue CSV into one Ink (.ink) file per leader,
+Converts a trainer dialogue CSV into one Ink (.ink) file per trainer,
 matching the hand-written format (see blaine.ink) used by the game's
 dialogue system.
 
 Usage:
-    python3 csv_to_ink.py gym_leader_dialogues.csv -o output_dir/
+    python3 trainer_csv_to_ink.py gym_leader_dialogues.csv -o output_dir/
 """
 
 import argparse
@@ -16,9 +16,9 @@ import sys
 from pathlib import Path
 
 # Columns expected in the CSV (order doesn't matter, header names do)
-REQUIRED_FIELDS = ["id", "challenge", "win", "badge", "tm", "post_victory", "lose"]
+REQUIRED_FIELDS = ["id", "challenge", "win", "post_victory", "lose"]
 
-INK_TEMPLATE = """{{ has("$player.inventory", "{badge_item}"):
+INK_TEMPLATE = """{{ get("$self.beaten"):
     -> post_victory
    - else:
     -> challenge
@@ -31,9 +31,8 @@ INK_TEMPLATE = """{{ has("$player.inventory", "{badge_item}"):
 
 == win
 ~ victory()
+~ set("$self.beaten", true)
 {win}
-~ add("$player.inventory", "{badge_item}")
-~ add("$player.inventory", "{tm_item}")
 -> END
 
 == lose
@@ -78,17 +77,15 @@ def load_rows(csv_path: Path):
         for i, row in enumerate(reader, start=2):  # start=2: header is line 1
             if not row.get("id", "").strip():
                 continue  # skip blank rows
+            for k,v in row.items():
+                print(k,v, v or "", type(v or ""))
             rows.append({k: (v or "").strip() for k, v in row.items()})
         return rows
 
 
 def row_to_ink(row: dict) -> str:
-    badge_item = f"{row['badge'].strip()}_badge"
-    tm_item = f"tm_{row['tm'].strip()}"
-
+    
     return INK_TEMPLATE.format(
-        badge_item=badge_item,
-        tm_item=tm_item,
         challenge=unescape_field(row["challenge"]),
         win=unescape_field(row["win"]),
         lose=unescape_field(row["lose"]),
