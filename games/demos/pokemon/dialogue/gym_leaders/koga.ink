@@ -1,7 +1,4 @@
-
-VAR badge = "soul_badge"
-
-{ has("$player.inventory", badge):
+{ has("$player.inventory", "soul_badge"):
     -> post_victory
    - else:
     -> challenge
@@ -19,8 +16,13 @@ So, so much coffee.
 ~ victory()
 zzz
 (you go through his pockets and get a badge and TM)
-~ add("$player.inventory", badge)
+~ add("$player.inventory", "soul_badge")
 ~ add("$player.inventory", "tm_06")
+-> END
+
+== lose
+Ninja? I 'ardly know 'er!
+~ defeat()
 -> END
 
 == post_victory

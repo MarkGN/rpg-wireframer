@@ -8,6 +8,9 @@ test:
 run:
 	PYTHONPATH=. python -m runners.text $(GAME)
 
+validate-dialogue:
+	PYTHONPATH=. python -m validate.dialogues $(GAME)
+
 validate-rooms:
 	PYTHONPATH=. python -m validate.rooms $(GAME)
 

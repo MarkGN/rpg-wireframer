@@ -1,8 +1,6 @@
-VAR badge = "boulder_badge"
-
-{ has("$player.inventory", badge):
+{ has("$player.inventory", "boulder_badge"):
     -> post_victory
-    - else:
+   - else:
     -> challenge
 }
 
@@ -14,8 +12,13 @@ Hey. Let's rock!
 == win
 ~ victory()
 I was too stoned to win. Have a badge and a TM.
-~ add("$player.inventory", badge)
+~ add("$player.inventory", "boulder_badge")
 ~ add("$player.inventory", "tm_34")
+-> END
+
+== lose
+Get rocked to sleep.
+~ defeat()
 -> END
 
 == post_victory

@@ -1,4 +1,4 @@
-{ has("$player.inventory", volcano_badge"):
+{ has("$player.inventory", "volcano_badge"):
     -> post_victory
    - else:
     -> challenge
@@ -15,6 +15,11 @@ Hope you have burn heal!
 Alas, it was I who needed burn heal. Have a badge and a TM.
 ~ add("$player.inventory", "volcano_badge")
 ~ add("$player.inventory", "tm_38")
+-> END
+
+== lose
+Wahaha!
+~ defeat()
 -> END
 
 == post_victory

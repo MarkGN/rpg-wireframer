@@ -1,7 +1,4 @@
-
-VAR badge = "cascade_badge"
-
-{ has("$player.inventory", badge):
+{ has("$player.inventory", "cascade_badge"):
     -> post_victory
    - else:
     -> challenge
@@ -17,10 +14,16 @@ You're still a jerk! And Giovanni says I have to practise my waterboarding, so .
 == win
 ~ victory()
 Shoot. Don't tell the Boss. Here's a badge and TM.
-~ add("$player.inventory", badge)
+~ add("$player.inventory", "cascade_badge")
 ~ add("$player.inventory", "tm_11")
+-> END
 
-~ remove("cerulean_trashed.objects", "cerulean_cop")
+== lose
+Gee, {get('$player.name')}, I never realise you were such a wet blanket!
+...
+Wet blanket?
+Get it?
+~ defeat()
 -> END
 
 == post_victory

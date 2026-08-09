@@ -1,7 +1,4 @@
-
-VAR badge = "earth_badge"
-
-{ has("$player.inventory", badge):
+{ has("$player.inventory", "earth_badge"):
     -> post_victory
    - else:
     -> challenge
@@ -17,8 +14,13 @@ I'd have you whacked, but as this is G-rated, let's just battle.
 ~ victory()
 By Mafia Law, I hereby name you the new Don.
 Serve oppressively and well.
-~ add("$player.inventory", badge)
+~ add("$player.inventory", "earth_badge")
 ~ add("$player.inventory", "tm_27")
+-> END
+
+== lose
+Now beat it, kid.
+~ defeat()
 -> END
 
 == post_victory

@@ -1,7 +1,4 @@
-
-VAR badge = "marsh_badge"
-
-{ has("$player.inventory", badge):
+{ has("$player.inventory", "marsh_badge"):
     -> post_victory
    - else:
     -> challenge
@@ -17,8 +14,13 @@ We should swap.
 == win
 ~ victory()
 Uck. Now I have neither badge.
-~ add("$player.inventory", badge)
+~ add("$player.inventory", "marsh_badge")
 ~ add("$player.inventory", "tm_46")
+-> END
+
+== lose
+Look on the bright side: you lasted longer than the fighting (snerk) gym.
+~ defeat()
 -> END
 
 == post_victory

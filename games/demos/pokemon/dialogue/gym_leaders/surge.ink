@@ -1,7 +1,4 @@
-
-VAR badge = "thunder_badge"
-
-{ has("$player.inventory", badge):
+{ has("$player.inventory", "thunder_badge"):
     -> post_victory
    - else:
     -> challenge
@@ -15,8 +12,13 @@ Are you man enough to fight me?
 == win
 ~ victory()
 Sonic boom!
-~ add("$player.inventory", badge)
+~ add("$player.inventory", "thunder_badge")
 ~ add("$player.inventory", "tm_14")
+-> END
+
+== lose
+Man enough to fight with me, but not man enough to defeat me!
+~ defeat()
 -> END
 
 == post_victory

@@ -1,22 +1,24 @@
-
-VAR badge = "rainbow_badge"
-
-{ has("$player.inventory", badge):
+{ has("$player.inventory", "rainbow_badge"):
     -> post_victory
    - else:
     -> challenge
 }
 
 == challenge
-Only girls allowed.
+No boys allowed.
 ~ scenario("trainer")
 -> END
 
 == win
 ~ victory()
 Feminism is dead, and thus, so am I. Have my worldly belongings.
-~ add("$player.inventory", badge)
+~ add("$player.inventory", "rainbow_badge")
 ~ add("$player.inventory", "tm_21")
+-> END
+
+== lose
+Woo! Girl power!
+~ defeat()
 -> END
 
 == post_victory
