@@ -33,6 +33,8 @@ class Dialogue(Context):
         self.buffered_text: str | None = None
         self.buffered_speaker: str | None = None
         self.external_texts: list[str] = []
+        self.pending_scenario: str | None = None
+        self._pending_choice_text: str | None = None
 
     def on_enter(self, world: World) -> None:
         """
@@ -127,7 +129,7 @@ class Dialogue(Context):
             world.move_object(binder(npc).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1])
 
         def ext_scenario(script: str):
-            world.push_scenario(script=script, npc=self.npc)
+            self.pending_scenario = script
             return
 
         def ext_parse_inventory(obj: str):
@@ -167,6 +169,8 @@ class Dialogue(Context):
             )
 
         self.step_story()
+        if self.pending_scenario is not None and not self.last_text:
+            self._execute_pending_scenario(world)
 
     def step_story(self):
         try:
@@ -186,6 +190,9 @@ class Dialogue(Context):
                     self.external_texts = []
                 if text:
                     text = text.strip()
+                    if self._pending_choice_text is not None and text == self._pending_choice_text:
+                        self._pending_choice_text = None
+                        continue
                     if text:
                         if self.current_speaker != old_speaker:
                             if parts:
@@ -197,6 +204,8 @@ class Dialogue(Context):
                                 parts.append(text)
                         else:
                             parts.append(text)
+                    if self.pending_scenario is not None:
+                        break
                 if self.external_texts and not self.story.canContinue:
                     parts.extend(self.external_texts)
                     self.external_texts = []
@@ -206,7 +215,11 @@ class Dialogue(Context):
             self.story.Error(f"Ink error at {self.story.state.currentPointer}")
 
     def actions(self, world: World):
-        if self.story.canContinue or self.buffered_text is not None:
+        if (
+            self.story.canContinue
+            or self.buffered_text is not None
+            or self.pending_scenario is not None
+        ):
             return [Action(InteractType.CONTINUE_TALK, "-continue-")]
         elif self.story.currentChoices:
             return [
@@ -222,14 +235,26 @@ class Dialogue(Context):
         self.last_text = ""
         if verb == InteractType.END_DIALOGUE:
             world.pop_context()
+        elif self.pending_scenario is not None and not (
+            self.buffered_text is not None
+            or self.story.canContinue
+        ):
+            self._execute_pending_scenario(world)
         elif self.buffered_text is not None or self.story.canContinue:
             self.step_story()
         elif self.story.currentChoices:
+            self._pending_choice_text = target
             ix = [c.text for c in self.story.currentChoices].index(target)
             self.story.ChooseChoiceIndex(ix)
             self.step_story()
         else:
             world.pop_context()
+
+    def _execute_pending_scenario(self, world: World) -> None:
+        script = self.pending_scenario
+        self.pending_scenario = None
+        if script is not None:
+            world.push_scenario(script=script, npc=self.npc)
 
     def on_resume(self, world, **kwargs):
         if "goto" in kwargs:

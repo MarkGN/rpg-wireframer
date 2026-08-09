@@ -110,7 +110,6 @@ def convert(csv_path: Path, out_dir: Path) -> list:
 
 
 def main():
-    print(4)
     parser = argparse.ArgumentParser(description="Convert gym leader CSV to Ink files.")
     parser.add_argument("csv_file", type=Path, help="Path to the input CSV file")
     parser.add_argument(
@@ -123,7 +122,6 @@ def main():
         print(f"Error: {args.csv_file} does not exist", file=sys.stderr)
         sys.exit(1)
 
-    print(args, "args")
     written = convert(args.csv_file, args.out_dir)
     print(f"Wrote {len(written)} file(s) to {args.out_dir}/:")
     for path in written:

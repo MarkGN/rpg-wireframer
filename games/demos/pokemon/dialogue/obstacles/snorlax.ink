@@ -1,10 +1,10 @@
 {has("$player.inventory", "pokeflute"):
-    -> battle
+    -> meet
 }
 It's a fat sack of fat blocking your path.
 -> END
 
-== battle
+== meet
 Play the Pokeflute?
 + Yes
     It woke up and is enraged. -> battle
@@ -16,6 +16,21 @@ Play the Pokeflute?
 -> END
 
 == win
+~ remove("$npc_room.objects", "$self")
+~ move("$player", "rooms.$current_room", "rooms.$npc_room")
+-> END
+
+== lose
+The last thing you remember is Snorlax rolling onto you.
+~ defeat()
+-> END
+
+== run
+You run away. Snorlax goes back to sleep.
+-> END
+
+== catch
+You catch Snorlax!
 ~ remove("$npc_room.objects", "$self")
 ~ move("$player", "rooms.$current_room", "rooms.$npc_room")
 -> END

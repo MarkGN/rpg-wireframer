@@ -25,3 +25,8 @@ Pro tip: Hitmonchan kind of sucks. Elemental punches look cool, but its special 
 == final
 You have your Hitmon. Train him/her/it well.
 -> END
+
+== lose
+AND HIS NAME IS JOHN CENA!
+~ defeat()
+-> END

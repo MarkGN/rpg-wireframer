@@ -306,7 +306,6 @@ class World:
             to_objects.append(npc_id)
         if npc_id == self.player_handle:
             self.current_room = to_room
-        print(from_room, to_room, npc_id, self.player_handle)
         
     def npcs_in_room(self) -> list[str]:
         """Return npc_ids currently present in the active room."""
@@ -323,7 +322,6 @@ class World:
     def find_npc(self, npc) -> str:
         candidate_rooms = [key for (key, val) in self.world_state["rooms"].items() if npc in val["objects"]]
         if candidate_rooms:
-            print("finder", candidate_rooms)
             return candidate_rooms[0]
         else:
             sys.exit(

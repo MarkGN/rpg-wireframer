@@ -44,11 +44,11 @@ def test_player_can_pick_up_sword():
 
     actions = [
         ("t", "dave"),
-        ("c", "-continue-"),
         ("c", "end dialogue"),
         ("g", "Blacksmith"),
         ("t", "charlie"),
         ("c", "Buy"),
+        ("c", "-continue-"),
         ("b", "sword"),
     ]
     for verb, target in actions:
@@ -88,6 +88,7 @@ def test_beat_bob():
     actions = [
         ("g", "Gate"),
         ("c", "Bring it on."),
+        ("c", '-continue-'),
         ("f", "Fight and win"),
         ("c", "end dialogue"),
     ]

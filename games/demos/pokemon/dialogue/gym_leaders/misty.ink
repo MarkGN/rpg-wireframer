@@ -19,7 +19,7 @@ Shoot. Don't tell the Boss. Here's a badge and TM.
 -> END
 
 == lose
-Gee, {get('$player.name')}, I never realise you were such a wet blanket!
+Gee, {get("$player.name")}, I never realised you were such a wet blanket!
 ...
 Wet blanket?
 Get it?
