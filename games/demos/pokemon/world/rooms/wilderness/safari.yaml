@@ -2,3 +2,4 @@ name: Safari Zone
 description: A patch of savannah.
 exits: 
   Fuschia City: fuschia
+  Rest house: safari_rest

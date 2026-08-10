@@ -2,4 +2,4 @@ name: Route 25
 description: Rt. 24 to Bill's house.
 exits: 
   Rt. 24: route_24
-  Bill's House: bill
+  Bill's House: bill_house

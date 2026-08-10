@@ -1,0 +1,4 @@
+name: Rest house
+description: A house with drinks and shade.
+exits: 
+  outside: safari
