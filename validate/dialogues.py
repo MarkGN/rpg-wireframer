@@ -43,12 +43,12 @@ def load_custom_externals_definitions(dialogue_dir: Path) -> dict[str, int]:
         raw = yaml.safe_load(f) or {}
 
     if not isinstance(raw, dict):
-        raise ValueError(f"Expected mapping in {custom_path}, got {type(raw).__name__}")
+        raise TypeError(f"Expected mapping in {custom_path}, got {type(raw).__name__}")
 
     custom_externals: dict[str, int] = {}
     for name, spec in raw.items():
         if not isinstance(name, str):
-            raise ValueError(f"Invalid custom external name {name!r} in {custom_path}")
+            raise TypeError(f"Invalid custom external name {name!r} in {custom_path}")
         if isinstance(spec, dict) and "args" in spec:
             arg_count = spec["args"]
         elif isinstance(spec, int):
@@ -82,38 +82,40 @@ def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path:
             if globals_path.exists()
             else None
         )
-        temp_file = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             dir=ink_path.parent,
             suffix=".ink",
             delete=False,
             mode="w",
             encoding="utf-8",
-        )
-        try:
-            if include_path is not None:
-                temp_file.write(f"INCLUDE {include_path}\n")
-            if custom_externals:
-                for name, arg_count in custom_externals.items():
-                    args = ", ".join(f"arg{i}" for i in range(arg_count))
-                    temp_file.write(f"EXTERNAL {name}({args})\n")
-            temp_file.write(ink_path.read_text(encoding="utf-8"))
-            temp_file.close()
-            temp_path = Path(temp_file.name)
-            source_path = temp_path
+        ) as temp_file:
+            try:
+                if include_path is not None:
+                    temp_file.write(f"INCLUDE {include_path}\n")
+                if custom_externals:
+                    for name, arg_count in custom_externals.items():
+                        args = ", ".join(f"arg{i}" for i in range(arg_count))
+                        temp_file.write(f"EXTERNAL {name}({args})\n")
+                temp_file.write(ink_path.read_text(encoding="utf-8"))
+                temp_file.close()
+                temp_path = Path(temp_file.name)
+                source_path = temp_path
 
-            result = subprocess.run(
-                ["inklecate", "-o", str(json_path), str(source_path)],
-                capture_output=True,
-                text=True,
-            )
-        finally:
-            if temp_path is not None:
-                temp_path.unlink(missing_ok=True)
+                result = subprocess.run(
+                    ["inklecate", "-o", str(json_path), str(source_path)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            finally:
+                if temp_path is not None:
+                    temp_path.unlink(missing_ok=True)
     else:
         result = subprocess.run(
             ["inklecate", "-o", str(json_path), str(source_path)],
             capture_output=True,
             text=True,
+            check=False
         )
 
     if result.returncode != 0:
@@ -170,7 +172,7 @@ def _is_internal_target(target: str, knot_names: set[str]) -> bool:
         return True
     if "." in target:
         segments = target.split(".")
-        if any(segment.startswith("$") or segment.startswith("^") for segment in segments):
+        if any(segment.startswith("$") for segment in segments):
             return True
         if segments[-1].isdigit() and segments[0] in knot_names:
             return True
@@ -184,8 +186,7 @@ def _find_divert_targets(node: Any, origin: str) -> tuple[set[str], list[tuple[s
     if isinstance(node, dict):
         if "->" in node:
             target = node["->"]
-            if isinstance(target, str) and not target.startswith(INTERNAL_DIVERT_PREFIX):
-                if target not in INTERNAL_TARGETS:
+            if isinstance(target, str) and not target.startswith(INTERNAL_DIVERT_PREFIX) and target not in INTERNAL_TARGETS:
                     targets.add(target)
         for value in node.values():
             child_targets, child_scenarios = _find_divert_targets(value, origin)
@@ -207,24 +208,24 @@ def _parse_scenario_outcomes(raw: Any, scenario_path: Path) -> dict[str, str]:
         mapping = {}
         for item in raw:
             if not isinstance(item, dict) or len(item) != 1:
-                raise ValueError(
+                raise TypeError(
                     f"Invalid outcomes entry in {scenario_path}: expected a list of single-key maps"
                 )
             key, value = next(iter(item.items()))
             mapping[key] = value
     else:
-        raise ValueError(
+        raise TypeError(
             f"Invalid outcomes value in {scenario_path}: expected a mapping or list, got {type(raw).__name__}"
         )
 
     outcomes: dict[str, str] = {}
     for label, target in mapping.items():
         if not isinstance(label, str):
-            raise ValueError(
+            raise TypeError(
                 f"Invalid outcome label in {scenario_path}: expected string, got {type(label).__name__}"
             )
         if not isinstance(target, str):
-            raise ValueError(
+            raise TypeError(
                 f"Invalid outcome target for '{label}' in {scenario_path}: expected string, got {type(target).__name__}"
             )
         outcomes[label] = target
@@ -275,12 +276,12 @@ def _collect_scenario_graph_edges(
             )
         raw = load_yaml(scenario_path)
         if not isinstance(raw, dict):
-            raise ValueError(
+            raise TypeError(
                 f"{dialogue_file}: scenario file '{scenario_path.relative_to(game_path)}' must contain a mapping"
             )
         context = raw.get("context")
         if not isinstance(context, str):
-            raise ValueError(
+            raise TypeError(
                 f"{dialogue_file}: scenario file '{scenario_path.relative_to(game_path)}' missing or invalid 'context'"
             )
         if context == "encounter":
@@ -350,14 +351,12 @@ def validate_dialogues(game_path: Path | str) -> None:
             if origin == "__root__":
                 continue
             for target in successors:
-                if target not in all_knots and target not in INTERNAL_TARGETS:
-                    if not _is_internal_target(target, all_knots):
+                if target not in all_knots and target not in INTERNAL_TARGETS and not _is_internal_target(target, all_knots):
                         target_errors.append(
                             f"{ink_path}: missing divert target '{target}' in knot '{origin}'"
                         )
         for target in graph["__root__"]:
-            if target not in all_knots and target not in INTERNAL_TARGETS:
-                if not _is_internal_target(target, all_knots):
+            if target not in all_knots and target not in INTERNAL_TARGETS and not _is_internal_target(target, all_knots):
                     target_errors.append(
                         f"{ink_path}: missing divert target '{target}' in root flow"
                     )

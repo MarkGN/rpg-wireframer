@@ -1,5 +1,5 @@
-from .contexts.encounter import Encounter
 from .contexts.dialogue import Dialogue
+from .contexts.encounter import Encounter
 from .contexts.explore import Explore
 from .contexts.shop import Shop
 

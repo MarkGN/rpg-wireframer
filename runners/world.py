@@ -8,10 +8,9 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 if TYPE_CHECKING:
-    from .context import Context
     from .action import Action
+    from .context import Context
 from .factory import ContextFactory
-
 
 # ---------------------------------------------------------------------------
 # Loader
@@ -330,7 +329,7 @@ class World:
             )
 
     def display_room(self) -> dict[str, Any]:
-        output: dict[str, Any] = dict()
+        output: dict[str, Any] = {}
         room = self.world_state["rooms"][self.current_room]
         output["handle"] = self.current_room
         output["name"] = room.get("name", self.current_room)

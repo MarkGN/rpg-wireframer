@@ -51,8 +51,7 @@ def validate_world(game_path: Path | str) -> None:
         for obj in room_data.get("objects", []) or []:
             if isinstance(obj, str):
                 object_handles.add(obj)
-            elif isinstance(obj, dict):
-                if len(obj) == 1 and isinstance(next(iter(obj.values())), dict):
+            elif isinstance(obj, dict) and len(obj) == 1 and isinstance(next(iter(obj.values())), dict):
                     obj_handle = next(iter(obj.keys()))
                     if isinstance(obj_handle, str):
                         object_handles.add(obj_handle)
@@ -98,7 +97,7 @@ def validate_world(game_path: Path | str) -> None:
                     f"Object {path.stem} points to unknown rooms: {invalid_rooms}"
                 )
         else:
-            raise ValueError(
+            raise TypeError(
                 f"Object {path.stem} has invalid location value {location!r}"
             )
 
@@ -125,13 +124,13 @@ def validate_world(game_path: Path | str) -> None:
                     f"Room {room_id} links to unknown exits: {invalid_exits}"
                 )
         else:
-            raise ValueError(f"Room {room_id} has invalid exits value {exits!r}")
+            raise TypeError(f"Room {room_id} has invalid exits value {exits!r}")
 
         objects = room_data.get("objects")
         if objects is None:
             continue
         if not isinstance(objects, list):
-            raise ValueError(f"Room {room_id} has invalid objects value {objects!r}")
+            raise TypeError(f"Room {room_id} has invalid objects value {objects!r}")
         for obj in objects:
             if isinstance(obj, str):
                 if obj not in object_handles:
@@ -145,11 +144,11 @@ def validate_world(game_path: Path | str) -> None:
                     obj_handle = None
                     obj_data = obj
                 if obj_handle is not None and not isinstance(obj_handle, str):
-                    raise ValueError(
+                    raise TypeError(
                         f"Room {room_id} has invalid inline object handle {obj_handle!r}"
                     )
                 if not isinstance(obj_data, dict):
-                    raise ValueError(
+                    raise TypeError(
                         f"Room {room_id} inline object must be a mapping, got {obj!r}"
                     )
                 base = obj_data.get("inherits")
@@ -171,7 +170,7 @@ def validate_world(game_path: Path | str) -> None:
                         f"Room {room_id} inline object cannot define both 'inherits' and 'template'"
                     )
             else:
-                raise ValueError(f"Room {room_id} has invalid object entry {obj!r}")
+                raise TypeError(f"Room {room_id} has invalid object entry {obj!r}")
 
     visited: set[str] = set()
     stack = [start_room]

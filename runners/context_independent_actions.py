@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from .presentation import format_inventory, format_quest_log
 
 _DEFAULT_ACTIONS = ["quit", "inventory", "quest_log"]

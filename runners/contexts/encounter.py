@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -30,7 +31,7 @@ class Encounter(Context):
         ]
 
     def actions(self, world: World) -> list[Action]:
-        return [Action(InteractType.FIGHT, key) for key in self.outcomes.keys()]
+        return [Action(InteractType.FIGHT, key) for key in self.outcomes]
 
     # This is why we have to assume this was called from a Dialogue
     def apply(self, verb: str | None, target: str | None, world: World):

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 csv_to_ink.py
 

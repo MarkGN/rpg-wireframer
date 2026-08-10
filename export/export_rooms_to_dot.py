@@ -23,12 +23,12 @@ def parse_exits(exits: Any) -> list[str]:
             elif isinstance(target, dict):
                 room = target.get("room")
                 if not isinstance(room, str):
-                    raise ValueError(
+                    raise TypeError(
                         f"Exit object must contain a string room field, got {target!r}"
                     )
                 targets.append(room)
             else:
-                raise ValueError(
+                raise TypeError(
                     f"Invalid exit value {target!r}; expected string or mapping"
                 )
         return targets
@@ -36,7 +36,7 @@ def parse_exits(exits: Any) -> list[str]:
         targets: list[str] = []
         for target in exits:
             if not isinstance(target, str):
-                raise ValueError(
+                raise TypeError(
                     f"Invalid exit target {target!r}; expected room handle string"
                 )
             targets.append(target)

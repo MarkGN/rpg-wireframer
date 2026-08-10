@@ -1,5 +1,5 @@
-from pathlib import Path
 import textwrap
+from pathlib import Path
 
 from export.export_rooms_to_dot import export_rooms_to_dot
 

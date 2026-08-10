@@ -1,10 +1,9 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..world import World
-from inkpython import Story
-import inkpython
 import json
 import os
 import subprocess
@@ -12,7 +11,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import inkpython
 import yaml
+from inkpython import Story
+
 from ..action import Action, InteractType
 from ..binder import Binder
 from ..context import Context
@@ -130,7 +132,6 @@ class Dialogue(Context):
 
         def ext_scenario(script: str):
             self.pending_scenario = script
-            return
 
         def ext_parse_inventory(obj: str):
             s = binder(obj + ".inventory")
@@ -145,7 +146,7 @@ class Dialogue(Context):
                 return ", ".join(ls[:-1]) + ", and " + ls[-1]
 
         def ext_speaker(npc: str) -> None:
-            self.current_speaker = npc
+            self.current_speaker = world.get_state(binder(npc)+".name")
 
         self.story.BindExternalFunction("get", ext_get)
         self.story.BindExternalFunction("set", ext_set)
@@ -298,11 +299,7 @@ def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
     if not compile_needed:
         source_mtime = ink_path.stat().st_mtime
         json_mtime = json_path.stat().st_mtime
-        if source_mtime > json_mtime:
-            compile_needed = True
-        elif globals_path.exists() and globals_path.stat().st_mtime > json_mtime:
-            compile_needed = True
-        elif (
+        if source_mtime > json_mtime or globals_path.exists() and globals_path.stat().st_mtime > json_mtime or (
             custom_externals_path.exists()
             and custom_externals_path.stat().st_mtime > json_mtime
         ):
@@ -314,42 +311,44 @@ def ink_json_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
             if globals_path.exists()
             else None
         )
-        temp_file = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             dir=ink_path.parent,
             suffix=".ink",
             delete=False,
             mode="w",
             encoding="utf-8",
-        )
-        try:
-            if include_path is not None:
-                temp_file.write(f"INCLUDE {include_path}\n")
-            if custom_externals:
-                for name, arg_count in custom_externals.items():
-                    args = ", ".join(f"arg{i}" for i in range(arg_count))
-                    temp_file.write(f"EXTERNAL {name}({args})\n")
-            temp_file.write(ink_path.read_text(encoding="utf-8"))
-            temp_file.close()
-            temp_path = Path(temp_file.name)
-            source_path = temp_path
+        ) as temp_file:
+            try:
+                if include_path is not None:
+                    temp_file.write(f"INCLUDE {include_path}\n")
+                if custom_externals:
+                    for name, arg_count in custom_externals.items():
+                        args = ", ".join(f"arg{i}" for i in range(arg_count))
+                        temp_file.write(f"EXTERNAL {name}({args})\n")
+                temp_file.write(ink_path.read_text(encoding="utf-8"))
+                temp_file.close()
+                temp_path = Path(temp_file.name)
+                source_path = temp_path
 
-            if compile_needed:
-                result = subprocess.run(
-                    ["inklecate", "-o", str(json_path), str(source_path)],
-                    capture_output=True,
-                    text=True,
-                )
-            else:
-                result = None
-        finally:
-            if temp_path is not None:
-                temp_path.unlink(missing_ok=True)
+                if compile_needed:
+                    result = subprocess.run(
+                        ["inklecate", "-o", str(json_path), str(source_path)],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                else:
+                    result = None
+            finally:
+                if temp_path is not None:
+                    temp_path.unlink(missing_ok=True)
     else:
         if compile_needed:
             result = subprocess.run(
                 ["inklecate", "-o", str(json_path), str(source_path)],
                 capture_output=True,
                 text=True,
+                check=False,
             )
         else:
             result = None
@@ -392,12 +391,12 @@ def load_custom_externals_definitions(dialogue_dir: Path) -> dict[str, int]:
         raw = yaml.safe_load(f) or {}
 
     if not isinstance(raw, dict):
-        raise ValueError(f"Expected mapping in {custom_path}, got {type(raw).__name__}")
+        raise TypeError(f"Expected mapping in {custom_path}, got {type(raw).__name__}")
 
     custom_externals: dict[str, int] = {}
     for name, spec in raw.items():
         if not isinstance(name, str):
-            raise ValueError(f"Invalid custom external name {name!r} in {custom_path}")
+            raise TypeError(f"Invalid custom external name {name!r} in {custom_path}")
         if isinstance(spec, dict) and "args" in spec:
             arg_count = spec["args"]
         elif isinstance(spec, int):
@@ -414,7 +413,7 @@ def load_custom_externals_definitions(dialogue_dir: Path) -> dict[str, int]:
     return custom_externals
 
 
-def make_custom_external_function(name: str, arg_count: int, dialogue: "Dialogue"):
+def make_custom_external_function(name: str, arg_count: int, dialogue: Dialogue):
     def ext(*args: Any):
         if len(args) != arg_count:
             raise TypeError(

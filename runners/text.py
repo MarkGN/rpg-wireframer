@@ -1,19 +1,19 @@
 from pathlib import Path
 from sys import argv
 
-from .contexts.encounter import Encounter
-from .contexts.dialogue import Dialogue
-from .contexts.explore import Explore
-from .contexts.shop import Shop
 from .context_independent_actions import (
     get_context_independent_actions,
     handle_context_independent_action,
 )
+from .contexts.dialogue import Dialogue
+from .contexts.encounter import Encounter
+from .contexts.explore import Explore
+from .contexts.shop import Shop
 from .presentation import (
     format_actions,
-    format_encounter_header,
     format_context_independent_actions,
     format_dialogue_header,
+    format_encounter_header,
     format_explore_header,
     format_shop_header,
 )

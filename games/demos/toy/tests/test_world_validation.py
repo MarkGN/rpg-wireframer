@@ -1,5 +1,5 @@
-from pathlib import Path
 import textwrap
+from pathlib import Path
 
 from runners.world import World
 from validate.game_objects import validate_game_objects

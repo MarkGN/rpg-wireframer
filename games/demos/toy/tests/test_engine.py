@@ -1,13 +1,13 @@
-from pathlib import Path
 import shutil
 import sys
+from pathlib import Path
 
 import pytest
 
+from runners.binder import Binder
 from runners.context_independent_actions import get_context_independent_actions
 from runners.contexts.dialogue import find_ink_path, ink_json_path
 from runners.world import World
-from runners.binder import Binder
 
 
 def get_game_dir() -> str:
@@ -200,8 +200,8 @@ def test_speaker_chiming_in():
     # Continue the dialogue
     world.handle_action("c", "-continue-")
 
-    # Verify that the speaker transitioned to Alice and the text updated
-    assert context.current_speaker == "dave"
+    # Verify that the speaker transitioned to Dave and the text updated
+    assert context.current_speaker == "Dave"
     assert context.last_text == "You suck!"
 
     # Say fine
@@ -265,7 +265,7 @@ def test_dialogue_bad_external_call_returns_line_number():
             "ink": "bad_call_test",
         }
         world.push_context("dialogue", npc="test_npc")
-    except Exception as exc:
+    except Exception as exc: # noqa: BLE001
         err_msg = str(exc)
         assert "line 2" in err_msg.lower()
         assert "increase" in err_msg
@@ -285,7 +285,7 @@ def test_dialogue_malformed_ink_returns_line_number():
         from runners.contexts.dialogue import ink_json_path
 
         ink_json_path("malformed_test.ink", dialogue_dir)
-    except Exception as exc:
+    except Exception as exc: # noqa: BLE001
         err_msg = str(exc)
         assert "line 2" in err_msg.lower()
         assert "non_existent_knot" in err_msg
