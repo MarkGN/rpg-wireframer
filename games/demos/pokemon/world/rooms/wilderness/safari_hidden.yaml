@@ -1,0 +1,6 @@
+name: Hidden house
+description: A hidden house with CONGRATULATION [sic] banners hanging everywhere.
+exits: 
+  outside: safari
+objects:
+  - henry

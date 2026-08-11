@@ -1,5 +1,6 @@
 name: Route 16
 description: Rt. 16 to Celadon City.
 exits: 
+  Fly house: route_16_fly_house
   Rt. 17: route_17
   Celadon City: celadon

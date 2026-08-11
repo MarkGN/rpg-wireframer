@@ -3,3 +3,4 @@ description: Cerulean to Saffron City.
 exits: 
   Cerulean City: cerulean_east
   Saffron City: saffron
+  Underground: underground_north

@@ -1,0 +1,9 @@
+name: Fly house
+description: A neat little house.
+exits: 
+  Rt. 16: route_16
+objects:
+  - tree:
+    inherits: cut_tree
+    # technically this is outside in a hallway area
+  - kiki

@@ -1,0 +1,6 @@
+name: Warden's house
+description: A small house.
+exits: 
+  Town: fuschia
+objects:
+  - warren

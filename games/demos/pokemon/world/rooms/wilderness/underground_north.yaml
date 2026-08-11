@@ -1,0 +1,5 @@
+name: Underground North
+description: A shortcut.
+exits: 
+  Rt. 5: route_5
+  Rt. 6: route_6

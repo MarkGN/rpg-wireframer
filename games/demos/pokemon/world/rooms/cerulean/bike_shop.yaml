@@ -1,0 +1,4 @@
+name: Bike shop
+description: A shop with bikes.
+exits: 
+  outside: cerulean

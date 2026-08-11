@@ -2,6 +2,6 @@ name: Vermilion Dock
 description: A dock.
 exits: 
   Town: vermilion
-  SS Anne: anne
+  SS Anne: ss_anne
 objects:
   - ticket_master

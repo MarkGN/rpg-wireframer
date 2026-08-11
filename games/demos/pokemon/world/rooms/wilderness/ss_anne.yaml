@@ -2,3 +2,5 @@ name: SS Anne
 description: A nice big pretty ship.
 exits: 
   Dock: dock
+objects:
+  - captain

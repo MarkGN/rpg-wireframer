@@ -15,3 +15,7 @@ victory:
 defeat:
   args: 0
 # white out, revive at last Pokecenter with half money and full heal
+
+pokedex_count:
+  args: 0
+# returns number of pokemon you've caught

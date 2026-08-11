@@ -1,0 +1,6 @@
+name: Route 2 Gatehouse
+description: A gatehouse with ... I'm honestly not sure what these are for; they don't have these in Australia.
+exits: 
+  outside: route_2_mid
+objects:
+  - aiden
