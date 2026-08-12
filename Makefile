@@ -26,7 +26,7 @@ export-dot:
 	PYTHONPATH=. python export/export_rooms_to_dot.py $(GAME)
 
 lint:
-	ruff check .
+	ruff check . --fix
 
 typecheck:
 	PYTHONPATH=. mypy . --ignore-missing-imports

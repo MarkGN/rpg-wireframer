@@ -5,6 +5,8 @@ from typing import Any
 
 import yaml
 
+from runners import world
+
 
 def load_yaml(path: Path) -> dict[str, Any]:
     with open(path) as f:
@@ -23,68 +25,16 @@ def find_ink_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
 
 def validate_game_objects(game_path: Path | str) -> None:
     game_path = Path(game_path)
-    world_dir = game_path / "world"
-    objects_dir = world_dir / "game_objects"
-    items_dir = world_dir / "items"
+    w = world.World(game_path)
     dialogue_dir = game_path / "dialogue"
 
-    item_handles: set[str] = set()
-    object_paths: dict[str, Path] = {}
-    for path in sorted(objects_dir.rglob("*.yaml")):
-        object_paths[path.stem] = path
+    item_handles = set(w.world_state["items"].keys())
+    game_objects = w.world_state["game_objects"]
 
-    for path in sorted(items_dir.rglob("*.yaml")):
-        item_handles.add(path.stem)
+    if not game_objects:
+        raise ValueError(f"No game objects found in {w.game_objects_dir}")
 
-    if not object_paths:
-        raise ValueError(f"No game objects found in {objects_dir}")
-
-    resolved_game_objects: dict[str, dict[str, Any]] = {}
-
-    def resolve_game_object(
-        object_id: str, lineage: list[str] | None = None
-    ) -> dict[str, Any]:
-        if object_id in resolved_game_objects:
-            return resolved_game_objects[object_id]
-        if lineage is None:
-            lineage = []
-        if object_id in lineage:
-            cycle = " -> ".join(lineage + [object_id])
-            raise ValueError(f"Game object instance cycle detected: {cycle}")
-        if object_id not in object_paths:
-            raise ValueError(f"Game object '{object_id}' not found for inheritance.")
-
-        data = load_yaml(object_paths[object_id])
-        if "instance" in data:
-            parent_id = data["instance"]
-            parent = resolve_game_object(parent_id, lineage + [object_id])
-            merged: dict[str, Any] = dict(parent)
-            merged.update(data)
-            merged.pop("instance", None)
-            if data.get("abstract", False):
-                merged["abstract"] = True
-            else:
-                merged["abstract"] = False
-            data = merged
-        else:
-            data = dict(data)
-
-        data.setdefault("accosts", False)
-        data.setdefault("dialogue", f"{object_id}.ink")
-        data.setdefault("inventory", [])
-        data.setdefault("is_visible", True)
-        data.setdefault("money", 0)
-
-        resolved_game_objects[object_id] = data
-        return data
-
-    for object_id in sorted(object_paths):
-        raw_data = load_yaml(object_paths[object_id])
-        if raw_data.get("abstract", False) and "instance" not in raw_data:
-            continue
-
-        data = resolve_game_object(object_id)
-
+    for object_id, data in sorted(game_objects.items()):
         name = data.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"Game object {object_id} must have a non-empty name")
@@ -110,7 +60,9 @@ def validate_game_objects(game_path: Path | str) -> None:
                     f"Game object {object_id} references missing inventory items: {missing_items}"
                 )
 
-        ink_reference = data.get("ink", object_id)
+        ink_reference = data.get("ink", data.get("dialogue", f"{object_id}.ink"))
+        if isinstance(ink_reference, str) and ink_reference.endswith(".ink"):
+            ink_reference = ink_reference[:-4]
         if not isinstance(ink_reference, str):
             raise TypeError(f"Game object {object_id} ink reference must be a string")
         if find_ink_path(ink_reference, dialogue_dir) is None:

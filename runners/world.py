@@ -54,8 +54,16 @@ class World:
         """Load all yaml files."""
 
         # Rooms
+        room_paths: dict[str, Path] = {}
         for path in sorted(self.rooms_dir.rglob("*.yaml")):
             room_id = path.stem
+            if room_id in room_paths:
+                raise ValueError(
+                    f"Duplicate room name '{room_id}': "
+                    f"{room_paths[room_id].relative_to(self.rooms_dir)} and "
+                    f"{path.relative_to(self.rooms_dir)}"
+                )
+            room_paths[room_id] = path
             data = load_yaml(path)
             data.setdefault("items", [])
             self.world_state["rooms"][room_id] = data
@@ -232,7 +240,9 @@ class World:
 
         # PC
         game_data = load_yaml(self.game_file)
-        self.player_handle = game_data["player"]
+        self.player_handle = game_data.get("player", None)
+        if not self.player_handle:
+            raise ValueError(f"No player defined in {self.game_file}")
         self.game_settings = game_data.get("settings", {})
         if self.player_handle not in self.world_state["game_objects"]:
             sys.exit(
