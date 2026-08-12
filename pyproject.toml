@@ -12,6 +12,7 @@ dependencies = [
     "inkpython>=0.1.0",
     "unified-planning>=1.0.0",
     "pyperplan>=2.1",
+    "up-pyperplan>=1.0.0",
 ]
 
 [project.optional-dependencies]

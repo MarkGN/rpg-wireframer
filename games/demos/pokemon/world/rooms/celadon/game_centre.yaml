@@ -1,0 +1,5 @@
+name: Game Centre
+description: A casino with rows of pokies, etymology unrelated to Pokemon.
+exits: 
+  Town: celadon
+  Secret passage: rocket_hideout
