@@ -21,8 +21,16 @@ def validate_world(game_path: Path | str) -> None:
     game_file = world_dir / "game.yaml"
 
     rooms: dict[str, dict[str, Any]] = {}
+    room_paths: dict[str, Path] = {}
     for path in sorted(rooms_dir.rglob("*.yaml")):
         room_id = path.stem
+        if room_id in room_paths:
+            raise ValueError(
+                f"Duplicate room name '{room_id}': "
+                f"{room_paths[room_id].relative_to(rooms_dir)} and "
+                f"{path.relative_to(rooms_dir)}"
+            )
+        room_paths[room_id] = path
         rooms[room_id] = load_yaml(path)
 
     if not rooms:
