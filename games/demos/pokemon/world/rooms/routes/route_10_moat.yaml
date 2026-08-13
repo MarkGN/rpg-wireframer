@@ -4,4 +4,5 @@ exits:
   Rt. 10: route_10
   Power Plant: power
 objects: 
-  - w: water
+  - w:
+    inherits: water

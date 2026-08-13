@@ -15,7 +15,7 @@ You need a ticket to board this ship.
 Sorry, the ship's gone.
 ~ speaker("$player")
 When will it return?
-~ speaker("$self)
+~ speaker("$self")
 Never. It will never return. It was dynamited.
 -> END
 

@@ -1,4 +1,4 @@
-{ has("$player.inventory", "fly"):
+{ not get("$self.gifted"):
     -> fly
 }
 Hi {get("$player.name")}! I hear Team Rocket controls Silph Co.
@@ -15,4 +15,5 @@ You'd think so, but no.
 ~ speaker("$player")
 Okay. Thanks then.
 ~ add("$player.inventory", "fly")
+~ set("$self.gifted", 1)
 -> END

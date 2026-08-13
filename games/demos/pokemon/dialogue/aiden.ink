@@ -1,7 +1,7 @@
 { get("$self.given"):
     -> given
 }
-Hey, {get("$player.name"))}.
+Hey, {get("$player.name")}.
 { pokedex_count() >= 10:
     Ten Pokemon in your Pokedex. Not bad for a ten-year-old.
     That's serious enough to earn this. Here.

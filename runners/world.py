@@ -131,6 +131,8 @@ class World:
                 parent = resolve_game_object(parent_id, lineage + [object_id])
                 merged: dict[str, Any] = dict(parent)
                 merged.update(data)
+                if parent.get("dialogue", None) == parent_id:
+                    merged["dialogue"] = object_id
                 merged.pop("instance", None)
                 merged.pop("inherits", None)
                 merged.pop("template", None)
