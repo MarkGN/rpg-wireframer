@@ -1,0 +1,7 @@
+name: Pokemon Tower
+description: So many ghosts.
+exits: 
+  outside: lavender
+objects:
+  - marowak_ghost
+  - fuji

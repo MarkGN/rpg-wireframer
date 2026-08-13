@@ -140,7 +140,7 @@ class World:
                 data = dict(data)
 
             data.setdefault("accosts", False)
-            data.setdefault("dialogue", f"{object_id}.ink")
+            data.setdefault("dialogue", f"{object_id}")
             data.setdefault("inventory", [])
             data.setdefault("is_visible", True)
             data.setdefault("money", 0)
