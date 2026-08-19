@@ -7,6 +7,9 @@ dialogue system.
 
 Usage:
     python3 trainer_csv_to_ink.py gym_leader_dialogues.csv -o output_dir/
+    eg
+    $ cd games/demos/pokemon
+    $ python authoring/trainer_csv_to_ink.py authoring/trainer_dialogues.csv -o dialogue/generated_trainers/
 """
 
 import argparse

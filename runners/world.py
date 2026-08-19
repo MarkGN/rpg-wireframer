@@ -271,7 +271,6 @@ class World:
     def get_state(self, variable):
         terms = variable.split(".")
         value = self.world_state
-        print("akwrgt", variable)
         for term in terms:
             index = int(term) if term.isdigit() else term
             value = value[index]

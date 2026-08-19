@@ -22,7 +22,7 @@ When I get ny hand on hin, I'n gonna tear hid lunk outta hid ard!
     Ah. Hm. I see.
     Well, I need to thank you somehow. Here, have my old strength HM.
     ~ add("$player.inventory", "strength")
-    ~ speaker("$self")
+    ~ speaker("$player")
     Do I need to wash this?
     ~ speaker("$self")
     Can't hurt.

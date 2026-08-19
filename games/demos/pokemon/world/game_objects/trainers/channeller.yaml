@@ -1,0 +1,4 @@
+inherits: trainer
+abstract: true
+name: Channeller
+description: A creepy possibly-possessed girl.

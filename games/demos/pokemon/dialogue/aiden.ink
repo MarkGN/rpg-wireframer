@@ -6,6 +6,7 @@ Hey, {get("$player.name")}.
     Ten Pokemon in your Pokedex. Not bad for a ten-year-old.
     That's serious enough to earn this. Here.
     ~ add("$player.inventory", "flash")
+    ~ set("$self.given", 1)
     ~ speaker("$player")
     I need an adult.
     ~ speaker("$self")

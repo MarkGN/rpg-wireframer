@@ -3,5 +3,22 @@ description: So many ghosts.
 exits: 
   outside: lavender
 objects:
+  - blue_tower
+  - c1:
+    inherits: channeller
+    team: [ghastly23]
+    money: 690
+    ink: pt_c1
+  - c2:
+    inherits: channeller
+    team: [ghastly22]
+    money: 660
+    ink: pt_c2
+  - c3:
+    inherits: channeller
+    team: [ghastly24]
+    money: 720
+    ink: pt_c3
   - marowak_ghost
   - fuji
+# There's a whole mess more trainers spread across many storeys, but I'm not splitting this yet because there's not much narrative structure to the tower. I'll do some splitting to make Blue and the ghost accost. Really ought to do the Rockets too once I add them.

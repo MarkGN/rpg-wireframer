@@ -3,5 +3,5 @@ description: The workshop of a mad scientist who gives reality warping gremlins 
 exits: 
   outside: pallet
 objects:
-  - blue
+  - blue_lab
   - oak
