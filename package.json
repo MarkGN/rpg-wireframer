@@ -1,0 +1,25 @@
+{
+  "name": "wireframer-lsp",
+  "displayName": "Wireframer Language Server",
+  "description": "Minimal VS Code extension client for Wireframer LSP",
+  "version": "0.0.1",
+  "publisher": "wireframer",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml"
+  ],
+  "main": "./client/extension.js",
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  }
+}

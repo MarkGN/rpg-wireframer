@@ -146,3 +146,28 @@ class TestRoomReachabilityValidator:
 
         with pytest.raises(ValueError, match="No player defined"):
             validate_quests(game_dir)
+
+    def test_dialogue_knot_unreachable(self, tmp_path: Path, capsys) -> None:
+        """Test detection of an unreachable knot in a reachable NPC dialogue."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {"exits": {}},
+            },
+        )
+        game_objects_dir = game_dir / "world" / "game_objects"
+        (game_objects_dir / "npc.yaml").write_text(
+            yaml.dump({"name": "NPC", "location": "start", "ink": "npc.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "npc.ink").write_text(
+            "Hello!\n-> DONE\n=== hidden ===\nUnreachable knot.\n-> END\n",
+            encoding="utf-8",
+        )
+
+        validate_quests(game_dir)
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots: npc:hidden" in captured.out
+
