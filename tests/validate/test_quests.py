@@ -13,6 +13,7 @@ def create_test_game(
     rooms_config: dict[str, dict],
     start_room: str = "start",
     player_handle: str = "hero",
+    quests_config: dict[str, dict] | None = None,
 ) -> Path:
     """Helper to construct a test game directory structure."""
     game_dir = tmp_path / "test_game"
@@ -26,6 +27,9 @@ def create_test_game(
 
     game_objects_dir = world_dir / "game_objects"
     game_objects_dir.mkdir(exist_ok=True)
+
+    quests_dir = world_dir / "quests"
+    quests_dir.mkdir(exist_ok=True)
 
     (world_dir / "game.yaml").write_text(
         yaml.dump({"player": player_handle}), encoding="utf-8"
@@ -46,14 +50,21 @@ def create_test_game(
             encoding="utf-8",
         )
 
+    if quests_config:
+        for q_id, q_data in quests_config.items():
+            (quests_dir / f"{q_id}.yaml").write_text(
+                yaml.dump(q_data),
+                encoding="utf-8",
+            )
+
     return game_dir
 
 
 class TestRoomReachabilityValidator:
     """Tests for the STRIPS room reachability validator."""
 
-    def test_all_rooms_reachable(self, tmp_path: Path) -> None:
-        """Test a game layout where all rooms are reachable."""
+    def test_quest_goal_room_reachable(self, tmp_path: Path) -> None:
+        """Test a quest where goal_room is reachable."""
         game_dir = create_test_game(
             tmp_path,
             {
@@ -61,18 +72,19 @@ class TestRoomReachabilityValidator:
                 "hall": {"exits": {"South": "start", "East": "chamber"}},
                 "chamber": {"exits": {"West": "hall"}},
             },
+            quests_config={"reach_chamber": {"name": "Reach Chamber", "goal_room": "chamber"}},
         )
 
-        unreachable = validate_quests(game_dir)
-        assert unreachable == []
+        uncompletable = validate_quests(game_dir)
+        assert uncompletable == []
 
         validator = QuestValidator(game_dir)
         assert validator.validate() == []
         assert validator.validate_room_reachability() == []
         assert validate_world(game_dir) == []
 
-    def test_unreachable_room_detected(self, tmp_path: Path, capsys) -> None:
-        """Test detection of an unreachable room."""
+    def test_quest_goal_room_unreachable(self, tmp_path: Path) -> None:
+        """Test detection of an unreachable goal_room quest."""
         game_dir = create_test_game(
             tmp_path,
             {
@@ -80,59 +92,30 @@ class TestRoomReachabilityValidator:
                 "hall": {"exits": {"South": "start"}},
                 "dungeon": {"exits": {}},
             },
+            quests_config={"reach_dungeon": {"name": "Reach Dungeon", "goal_room": "dungeon"}},
         )
 
-        unreachable = validate_quests(game_dir)
-        assert unreachable == ["dungeon"]
+        with pytest.raises(ValueError, match="Quests not completable: reach_dungeon"):
+            validate_quests(game_dir)
 
-        captured = capsys.readouterr()
-        assert "Warning: unreachable rooms: dungeon" in captured.out
-
-    def test_multiple_unreachable_rooms_sorted(self, tmp_path: Path) -> None:
-        """Test that multiple unreachable rooms are returned sorted."""
+    def test_quest_irrelevant_branches_ignored(self, tmp_path: Path) -> None:
+        """Test that goal-directed planning succeeds despite many irrelevant branches."""
         game_dir = create_test_game(
             tmp_path,
             {
-                "start": {"exits": {"North": "room_a"}},
-                "room_a": {"exits": {}},
-                "secret_vault": {"exits": {}},
-                "attic": {"exits": {}},
+                "start": {"exits": {"North": "goal_room", "East": "branch_1", "West": "branch_2"}},
+                "goal_room": {"exits": {}},
+                "branch_1": {"exits": {"East": "branch_1_sub1", "South": "branch_1_sub2"}},
+                "branch_1_sub1": {"exits": {}},
+                "branch_1_sub2": {"exits": {}},
+                "branch_2": {"exits": {"West": "branch_2_sub1"}},
+                "branch_2_sub1": {"exits": {}},
             },
+            quests_config={"find_goal": {"name": "Find Goal", "goal_room": "goal_room"}},
         )
 
-        unreachable = validate_quests(game_dir)
-        assert unreachable == ["attic", "secret_vault"]
-
-    def test_one_way_reachability(self, tmp_path: Path) -> None:
-        """Test reachability through one-way exits."""
-        game_dir = create_test_game(
-            tmp_path,
-            {
-                "start": {"exits": {"Down": "pit"}},
-                "pit": {"exits": {"East": "cave"}},
-                "cave": {"exits": {}},
-            },
-        )
-
-        unreachable = validate_quests(game_dir)
-        assert unreachable == []
-
-    def test_cycle_and_branching(self, tmp_path: Path) -> None:
-        """Test room layouts with cycles and branching."""
-        game_dir = create_test_game(
-            tmp_path,
-            {
-                "start": {"exits": {"North": "node_a", "East": "node_b"}},
-                "node_a": {"exits": {"South": "start", "East": "node_c"}},
-                "node_b": {"exits": {"West": "start"}},
-                "node_c": {"exits": {"West": "node_a"}},
-                "isolated_island": {"exits": {"North": "isolated_tower"}},
-                "isolated_tower": {"exits": {"South": "isolated_island"}},
-            },
-        )
-
-        unreachable = validate_quests(game_dir)
-        assert unreachable == ["isolated_island", "isolated_tower"]
+        uncompletable = validate_quests(game_dir)
+        assert uncompletable == []
 
     def test_invalid_game_file(self, tmp_path: Path) -> None:
         """Test missing player handle raises error."""
@@ -147,27 +130,4 @@ class TestRoomReachabilityValidator:
         with pytest.raises(ValueError, match="No player defined"):
             validate_quests(game_dir)
 
-    def test_dialogue_knot_unreachable(self, tmp_path: Path, capsys) -> None:
-        """Test detection of an unreachable knot in a reachable NPC dialogue."""
-        game_dir = create_test_game(
-            tmp_path,
-            {
-                "start": {"exits": {}},
-            },
-        )
-        game_objects_dir = game_dir / "world" / "game_objects"
-        (game_objects_dir / "npc.yaml").write_text(
-            yaml.dump({"name": "NPC", "location": "start", "ink": "npc.ink"}),
-            encoding="utf-8",
-        )
-        dialogue_dir = game_dir / "dialogue"
-        dialogue_dir.mkdir(exist_ok=True)
-        (dialogue_dir / "npc.ink").write_text(
-            "Hello!\n-> DONE\n=== hidden ===\nUnreachable knot.\n-> END\n",
-            encoding="utf-8",
-        )
-
-        validate_quests(game_dir)
-        captured = capsys.readouterr()
-        assert "Warning: unreachable dialogue knots: npc:hidden" in captured.out
 
