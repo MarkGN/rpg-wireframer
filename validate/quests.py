@@ -10,6 +10,7 @@ up.get_environment().credits_stream = None
 import yaml
 
 from runners import world
+from runners.binder import Binder
 from validate.ink_analyser import analyze_ink_file, find_ink_path
 
 
@@ -18,8 +19,29 @@ def load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _evaluate_get_condition(var_path: str, npc_id: str, w: world.World) -> bool:
+    try:
+        npc_room = ""
+        try:
+            npc_room = w.find_npc(npc_id)
+        except SystemExit:
+            pass
+        bound_path = Binder(
+            {
+                "player": w.player_handle,
+                "self": npc_id,
+                "current_room": w.current_room,
+                "npc_room": npc_room,
+            }
+        ).apply(var_path)
+        val = w.get_state(bound_path)
+        return bool(val)
+    except (KeyError, IndexError, TypeError):
+        return False
+
+
 def validate_quests(game_path: Path | str) -> list[str]:
-    """Validate quest reachability using goal-directed STRIPS planning for quests with a goal_room field."""
+    """Validate dialogue knot reachability with read-only persistent state (evaluating get() guards)."""
     game_path = Path(game_path)
     w = world.World(game_path)
     rooms = w.world_state["rooms"]
@@ -30,6 +52,8 @@ def validate_quests(game_path: Path | str) -> list[str]:
 
     # Map NPC dialogues
     npc_dialogue_graphs: dict[str, dict[str, set[str]]] = {}
+    npc_get_conditions: dict[str, dict[str, list[tuple[str, str, bool]]]] = {}
+
     for obj_id, obj_data in game_objects.items():
         if obj_id == player_handle:
             continue
@@ -39,22 +63,11 @@ def validate_quests(game_path: Path | str) -> list[str]:
             ink_file = find_ink_path(f"{ink_ref}.ink", dialogue_dir)
             if ink_file and ink_file.exists():
                 try:
-                    graph, _ = analyze_ink_file(f"{ink_ref}.ink", dialogue_dir, game_path)
+                    graph, _, get_conds = analyze_ink_file(f"{ink_ref}.ink", dialogue_dir, game_path)
                     npc_dialogue_graphs[obj_id] = graph
+                    npc_get_conditions[obj_id] = get_conds
                 except (OSError, ValueError, TypeError):
                     pass
-
-    # Read quest files in world/quests/
-    quests_dir = game_path / "world" / "quests"
-    goal_room_quests: dict[str, str] = {}
-    if quests_dir.exists() and quests_dir.is_dir():
-        for q_file in sorted(quests_dir.glob("*.yaml")):
-            q_data = load_yaml(q_file)
-            if isinstance(q_data, dict) and "goal_room" in q_data:
-                goal_room_quests[q_file.stem] = str(q_data["goal_room"])
-
-    if not goal_room_quests:
-        return []
 
     # Construct STRIPS Planning Problem using unified-planning
     problem = up.Problem("quest_reachability")
@@ -100,17 +113,26 @@ def validate_quests(game_path: Path | str) -> list[str]:
                 problem.add_action(move_act)
 
     # Add NPC and Dialogue objects & actions
+    all_npc_knots: dict[str, list[str]] = {}
     for npc_id, graph in npc_dialogue_graphs.items():
         npc_obj = up.Object(npc_id, NPC)
         problem.add_object(npc_obj)
 
         knot_objs: dict[str, Any] = {}
+        all_npc_knots[npc_id] = [k for k in graph if k != "__root__"]
         for knot_name in graph:
             k_obj = up.Object(f"{npc_id}_{knot_name}", Knot)
             problem.add_object(k_obj)
             knot_objs[knot_name] = k_obj
 
-        npc_room = game_objects.get(npc_id, {}).get("location")
+        npc_room = ""
+        try:
+            npc_room = w.find_npc(npc_id)
+        except SystemExit:
+            pass
+        if not npc_room:
+            npc_room = game_objects.get(npc_id, {}).get("location")
+
         if npc_room in room_objs:
             talk_act = up.InstantaneousAction(f"talk_{npc_id}")
             talk_act.add_precondition(at_room(room_objs[npc_room]))
@@ -120,10 +142,21 @@ def validate_quests(game_path: Path | str) -> list[str]:
             talk_act.add_effect(at_knot(npc_obj, knot_objs["__root__"]), True)
             problem.add_action(talk_act)
 
+        get_conds = npc_get_conditions.get(npc_id, {})
         for src_knot, targets in graph.items():
             if src_knot not in knot_objs:
                 continue
+            src_conds = get_conds.get(src_knot, [])
             for tgt_knot in targets:
+                # Check if tgt_knot is governed by a get() guard
+                cond_matches = [c for c in src_conds if c[0] == tgt_knot]
+                if cond_matches:
+                    _, var_path, negated = cond_matches[0]
+                    val = _evaluate_get_condition(var_path, npc_id, w)
+                    condition_satisfied = (not val) if negated else val
+                    if not condition_satisfied:
+                        continue  # Prune invalid branch transition
+
                 if tgt_knot in ("done", "END"):
                     end_act = up.InstantaneousAction(f"end_dialogue_{npc_id}_{src_knot}")
                     end_act.add_precondition(in_dialogue(npc_obj))
@@ -140,25 +173,23 @@ def validate_quests(game_path: Path | str) -> list[str]:
                     branch_act.add_effect(at_knot(npc_obj, knot_objs[tgt_knot]), True)
                     problem.add_action(branch_act)
 
-    # Solve for each quest goal_room using goal-directed planner
-    uncompletable_quests: list[str] = []
+    # Test reachability of every knot for every reachable NPC dialogue
+    unreachable_knots: list[str] = []
     with up.OneshotPlanner(problem_kind=problem.kind) as planner:
-        for q_name, g_room in goal_room_quests.items():
-            if g_room not in room_objs:
-                uncompletable_quests.append(q_name)
-                continue
+        for npc_id, knot_list in all_npc_knots.items():
+            npc_obj = problem.object(npc_id)
+            for knot_name in knot_list:
+                k_obj = problem.object(f"{npc_id}_{knot_name}")
+                problem.clear_goals()
+                problem.add_goal(at_knot(npc_obj, k_obj))
+                res = planner.solve(problem)
+                if res.status.name not in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
+                    unreachable_knots.append(f"{npc_id}:{knot_name}")
 
-            problem.clear_goals()
-            problem.add_goal(at_room(room_objs[g_room]))
+    if unreachable_knots:
+        print(f"Warning: unreachable dialogue knots: {', '.join(sorted(unreachable_knots))}")
 
-            res = planner.solve(problem)
-            if res.status.name not in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
-                uncompletable_quests.append(q_name)
-
-    if uncompletable_quests:
-        raise ValueError(f"Quests not completable: {', '.join(sorted(uncompletable_quests))}")
-
-    return []
+    return unreachable_knots
 
 
 def validate_world(game_path: Path | str) -> list[str]:

@@ -232,7 +232,74 @@ def _parse_scenario_outcomes(raw: Any, scenario_path: Path) -> dict[str, str]:
     return outcomes
 
 
-def _build_graph_from_story(story_data: dict[str, Any]) -> tuple[dict[str, set[str]], list[tuple[str, str]]]:
+def _extract_target_from_branch(branch_dict: Any) -> str | None:
+    if isinstance(branch_dict, dict) and "b" in branch_dict:
+        b_list = branch_dict["b"]
+        if isinstance(b_list, list):
+            for item in b_list:
+                if isinstance(item, dict) and "->" in item:
+                    tgt = item["->"]
+                    if isinstance(tgt, str) and not _is_internal_target(tgt, set()):
+                        return tgt
+                elif isinstance(item, (dict, list)):
+                    sub_tgt = _extract_target_from_branch(item)
+                    if sub_tgt:
+                        return sub_tgt
+    elif isinstance(branch_dict, list):
+        for sub_item in branch_dict:
+            sub_tgt = _extract_target_from_branch(sub_item)
+            if sub_tgt:
+                return sub_tgt
+    return None
+
+
+def _find_get_conditions(node: Any, origin: str) -> list[tuple[str, str, bool]]:
+    results: list[tuple[str, str, bool]] = []
+    if isinstance(node, list):
+        for i, element in enumerate(node):
+            if isinstance(element, dict) and element.get("x()") == "get":
+                var_path = None
+                for j in range(i - 1, -1, -1):
+                    prev = node[j]
+                    if isinstance(prev, str) and prev.startswith("^"):
+                        var_path = prev[1:]
+                        break
+                if var_path:
+                    negated = False
+                    ev_idx = i + 1
+                    for k in range(i + 1, len(node)):
+                        if node[k] == "!":
+                            negated = True
+                        elif node[k] == "/ev":
+                            ev_idx = k
+                            break
+                    for k in range(ev_idx + 1, len(node)):
+                        elt = node[k]
+                        if isinstance(elt, list) and len(elt) >= 2:
+                            first_item = elt[0]
+                            second_item = elt[1]
+                            if isinstance(first_item, dict) and first_item.get("->") == ".^.b":
+                                is_conditional = first_item.get("c") is True
+                                target_knot = _extract_target_from_branch(second_item)
+                                if target_knot:
+                                    if is_conditional:
+                                        results.append((target_knot, var_path, negated))
+                                    else:
+                                        results.append((target_knot, var_path, not negated))
+                                continue
+                        if elt in ("nop", "done"):
+                            break
+
+            results.extend(_find_get_conditions(element, origin))
+    elif isinstance(node, dict):
+        for val in node.values():
+            results.extend(_find_get_conditions(val, origin))
+    return results
+
+
+def _build_graph_from_story(
+    story_data: dict[str, Any]
+) -> tuple[dict[str, set[str]], list[tuple[str, str]], dict[str, list[tuple[str, str, bool]]]]:
     if "root" not in story_data or not isinstance(story_data["root"], list):
         raise ValueError("Compiled Ink JSON did not contain a valid root element")
 
@@ -243,13 +310,16 @@ def _build_graph_from_story(story_data: dict[str, Any]) -> tuple[dict[str, set[s
     knots_container = root[2] if isinstance(root[2], dict) else {}
     knots = set(knots_container.keys())
     graph: dict[str, set[str]] = {"__root__": set()}
+    get_conditions: dict[str, list[tuple[str, str, bool]]] = {"__root__": []}
     for knot in knots:
         graph[knot] = set()
+        get_conditions[knot] = []
 
     root_targets, root_scenarios = _find_divert_targets(root[0], "__root__")
     graph["__root__"].update(
         t for t in root_targets if t in knots or t in INTERNAL_TARGETS
     )
+    get_conditions["__root__"].extend(_find_get_conditions(root[0], "__root__"))
 
     for knot_name, knot_body in knots_container.items():
         targets, scenario_calls = _find_divert_targets(knot_body, knot_name)
@@ -257,8 +327,9 @@ def _build_graph_from_story(story_data: dict[str, Any]) -> tuple[dict[str, set[s
             t for t in targets if t in knots or t in INTERNAL_TARGETS
         )
         root_scenarios.extend(scenario_calls)
+        get_conditions[knot_name].extend(_find_get_conditions(knot_body, knot_name))
 
-    return graph, root_scenarios
+    return graph, root_scenarios, get_conditions
 
 
 def _collect_scenario_graph_edges(
@@ -317,14 +388,14 @@ def _collect_reachable_knots(graph: dict[str, set[str]]) -> set[str]:
 
 def analyze_ink_file(
     ink_filename: str, dialogue_dir: Path, game_path: Path | None = None
-) -> tuple[dict[str, set[str]], list[tuple[str, str]]]:
+) -> tuple[dict[str, set[str]], list[tuple[str, str]], dict[str, list[tuple[str, str, bool]]]]:
     json_path = ink_json_path(ink_filename, dialogue_dir)
     with open(json_path, encoding="utf-8") as f:
         story_data = json.load(f)
 
-    graph, scenario_calls = _build_graph_from_story(story_data)
+    graph, scenario_calls, get_conditions = _build_graph_from_story(story_data)
     if game_path is not None:
         ink_path = find_ink_path(ink_filename, dialogue_dir) or (dialogue_dir / ink_filename)
         _collect_scenario_graph_edges(graph, scenario_calls, game_path, ink_path)
 
-    return graph, scenario_calls
+    return graph, scenario_calls, get_conditions
