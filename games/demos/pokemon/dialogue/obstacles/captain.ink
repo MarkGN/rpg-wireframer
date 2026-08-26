@@ -16,7 +16,7 @@ You, small child: give me a massage!
 I see nothing wrong with this.
 (You rub his shoulders. Thoroughly. Powerfully. Deeply. Sensuously.)
 ~ set("$self.seasick", false)
-~ set("quests.anne.completed")
+~ set("quests.anne.completed", 1)
 ~ speaker("$self")
 Ooh yeah, that's nice.
 Here, have a tip: HM01, Cut.
