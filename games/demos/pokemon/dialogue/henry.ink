@@ -1,4 +1,4 @@
-{ get("$self.gifted"):
+{ get("$self.given"):
     -> given
 }
 Ah! Finally!

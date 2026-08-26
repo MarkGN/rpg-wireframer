@@ -1,4 +1,4 @@
-{ get("$self.money") == 0:
+{ get("$self.beaten") == 0:
     -> post_victory
    - else:
     -> challenge
@@ -11,6 +11,7 @@ It's punch time!
 
 == win
 ~ victory()
+~ set("$self.beaten", true)
 I got punched, so now, you may choose a Hitmon.
 -> END
 

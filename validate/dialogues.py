@@ -24,7 +24,7 @@ def validate_dialogues(game_path: Path | str) -> None:
             continue
 
         ink_filename = ink_path.name
-        graph, _, _ = analyze_ink_file(ink_filename, dialogue_dir, game_path)
+        graph, *_ = analyze_ink_file(ink_filename, dialogue_dir, game_path)
 
         all_knots = {name for name in graph if name != "__root__"}
         visited: set[str] = set()

@@ -197,4 +197,92 @@ class TestRoomReachabilityValidator:
         captured = capsys.readouterr()
         assert "Warning: unreachable dialogue knots" not in captured.out
 
+    def test_set_mutation_same_dialogue(self, tmp_path: Path, capsys) -> None:
+        """Test that set() in a knot mutates state and enables a subsequent get() guard."""
+        game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink", "met": False}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL get(x)\nEXTERNAL set(x, y)\n")
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n~ set(\"alice.met\", true)\n{get(\"alice.met\"): -> met_knot}\n-> DONE\n=== met_knot ===\nHi again!\n-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_set_mutation_cross_dialogue(self, tmp_path: Path, capsys) -> None:
+        """Test that set() executed in one NPC dialogue is visible to get() in another NPC dialogue."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {"exits": {"East": "garden"}},
+                "garden": {"exits": {"West": "start"}},
+            },
+        )
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "game_objects" / "bob.yaml").write_text(
+            yaml.dump({"name": "Bob", "location": "garden", "ink": "bob.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL get(x)\nEXTERNAL set(x, y)\n")
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n~ set(\"alice.talked\", true)\n-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "bob.ink").write_text(
+            "-> root\n=== root ===\n{get(\"alice.talked\"): -> secret_knot}\n-> DONE\n=== secret_knot ===\nThanks for talking to Alice!\n-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_set_mutation_unreachable_path(self, tmp_path: Path, capsys) -> None:
+        """Test that set() on an unreachable branch does not satisfy get() guards."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {"exits": {"East": "garden"}},
+                "garden": {"exits": {"West": "start"}},
+            },
+        )
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "game_objects" / "bob.yaml").write_text(
+            yaml.dump({"name": "Bob", "location": "garden", "ink": "bob.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL get(x)\nEXTERNAL set(x, y)\n")
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n{get(\"alice.impossible\"): -> secret_knot}\n-> DONE\n=== secret_knot ===\n~ set(\"alice.unlocked\", true)\n-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "bob.ink").write_text(
+            "-> root\n=== root ===\n{get(\"alice.unlocked\"): -> bob_secret}\n-> DONE\n=== bob_secret ===\nUnlocked!\n-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert set(unreachable) == {"alice:secret_knot", "bob:bob_secret"}
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots: alice:secret_knot, bob:bob_secret" in captured.out
+
 

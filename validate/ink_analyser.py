@@ -297,9 +297,37 @@ def _find_get_conditions(node: Any, origin: str) -> list[tuple[str, str, bool]]:
     return results
 
 
+def _find_set_mutations(node: Any, origin: str) -> list[tuple[str, Any]]:
+    results: list[tuple[str, Any]] = []
+    if isinstance(node, list):
+        for i, element in enumerate(node):
+            if isinstance(element, dict) and element.get("x()") == "set":
+                key = None
+                value = None
+                if i - 1 >= 0:
+                    prev1 = node[i - 1]
+                    if prev1 == "/str":
+                        if i - 3 >= 0 and node[i - 3] == "str" and isinstance(node[i - 2], str) and node[i - 2].startswith("^"):
+                            value = node[i - 2][1:]
+                            if i - 6 >= 0 and node[i - 4] == "/str" and node[i - 6] == "str" and isinstance(node[i - 5], str) and node[i - 5].startswith("^"):
+                                key = node[i - 5][1:]
+                    else:
+                        value = prev1
+                        if i - 4 >= 0 and node[i - 2] == "/str" and node[i - 4] == "str" and isinstance(node[i - 3], str) and node[i - 3].startswith("^"):
+                            key = node[i - 3][1:]
+                if key is not None:
+                    results.append((key, value))
+            elif isinstance(element, (list, dict)):
+                results.extend(_find_set_mutations(element, origin))
+    elif isinstance(node, dict):
+        for val in node.values():
+            results.extend(_find_set_mutations(val, origin))
+    return results
+
+
 def _build_graph_from_story(
     story_data: dict[str, Any]
-) -> tuple[dict[str, set[str]], list[tuple[str, str]], dict[str, list[tuple[str, str, bool]]]]:
+) -> tuple[dict[str, set[str]], list[tuple[str, str]], dict[str, list[tuple[str, str, bool]]], dict[str, list[tuple[str, Any]]]]:
     if "root" not in story_data or not isinstance(story_data["root"], list):
         raise ValueError("Compiled Ink JSON did not contain a valid root element")
 
@@ -311,15 +339,18 @@ def _build_graph_from_story(
     knots = set(knots_container.keys())
     graph: dict[str, set[str]] = {"__root__": set()}
     get_conditions: dict[str, list[tuple[str, str, bool]]] = {"__root__": []}
+    set_mutations: dict[str, list[tuple[str, Any]]] = {"__root__": []}
     for knot in knots:
         graph[knot] = set()
         get_conditions[knot] = []
+        set_mutations[knot] = []
 
     root_targets, root_scenarios = _find_divert_targets(root[0], "__root__")
     graph["__root__"].update(
         t for t in root_targets if t in knots or t in INTERNAL_TARGETS
     )
     get_conditions["__root__"].extend(_find_get_conditions(root[0], "__root__"))
+    set_mutations["__root__"].extend(_find_set_mutations(root[0], "__root__"))
 
     for knot_name, knot_body in knots_container.items():
         targets, scenario_calls = _find_divert_targets(knot_body, knot_name)
@@ -328,8 +359,9 @@ def _build_graph_from_story(
         )
         root_scenarios.extend(scenario_calls)
         get_conditions[knot_name].extend(_find_get_conditions(knot_body, knot_name))
+        set_mutations[knot_name].extend(_find_set_mutations(knot_body, knot_name))
 
-    return graph, root_scenarios, get_conditions
+    return graph, root_scenarios, get_conditions, set_mutations
 
 
 def _collect_scenario_graph_edges(
@@ -388,14 +420,14 @@ def _collect_reachable_knots(graph: dict[str, set[str]]) -> set[str]:
 
 def analyze_ink_file(
     ink_filename: str, dialogue_dir: Path, game_path: Path | None = None
-) -> tuple[dict[str, set[str]], list[tuple[str, str]], dict[str, list[tuple[str, str, bool]]]]:
+) -> tuple[dict[str, set[str]], list[tuple[str, str]], dict[str, list[tuple[str, str, bool]]], dict[str, list[tuple[str, Any]]]]:
     json_path = ink_json_path(ink_filename, dialogue_dir)
     with open(json_path, encoding="utf-8") as f:
         story_data = json.load(f)
 
-    graph, scenario_calls, get_conditions = _build_graph_from_story(story_data)
+    graph, scenario_calls, get_conditions, set_mutations = _build_graph_from_story(story_data)
     if game_path is not None:
         ink_path = find_ink_path(ink_filename, dialogue_dir) or (dialogue_dir / ink_filename)
         _collect_scenario_graph_edges(graph, scenario_calls, game_path, ink_path)
 
-    return graph, scenario_calls, get_conditions
+    return graph, scenario_calls, get_conditions, set_mutations

@@ -103,7 +103,7 @@ def test_quests_load():
     world = World(Path(f"{game_dir}"))
 
     assert "alice_flower" in world.world_state["quests"]
-    assert world.world_state["quests"]["alice_flower"]["stage"] == 0
+    assert world.world_state["quests"]["alice_flower"]["completed"] == 0
     assert world.world_state["quests"]["alice_flower"]["name"] == "A flower for Alice"
 
 

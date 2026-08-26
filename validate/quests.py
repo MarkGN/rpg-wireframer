@@ -19,21 +19,24 @@ def load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
-def _evaluate_get_condition(var_path: str, npc_id: str, w: world.World) -> bool:
+def _bind_var_path(var_path: str, npc_id: str, w: world.World) -> str:
+    npc_room = ""
     try:
-        npc_room = ""
-        try:
-            npc_room = w.find_npc(npc_id)
-        except SystemExit:
-            pass
-        bound_path = Binder(
-            {
-                "player": w.player_handle,
-                "self": npc_id,
-                "current_room": w.current_room,
-                "npc_room": npc_room,
-            }
-        ).apply(var_path)
+        npc_room = w.find_npc(npc_id)
+    except SystemExit:
+        pass
+    return Binder(
+        {
+            "player": w.player_handle,
+            "self": npc_id,
+            "current_room": w.current_room,
+            "npc_room": npc_room,
+        }
+    ).apply(var_path)
+
+
+def _evaluate_initial_state(bound_path: str, w: world.World) -> bool:
+    try:
         val = w.get_state(bound_path)
         return bool(val)
     except (KeyError, IndexError, TypeError):
@@ -41,18 +44,19 @@ def _evaluate_get_condition(var_path: str, npc_id: str, w: world.World) -> bool:
 
 
 def validate_quests(game_path: Path | str) -> list[str]:
-    """Validate dialogue knot reachability with read-only persistent state (evaluating get() guards)."""
+    """Validate dialogue knot reachability with dynamic persistent state (evaluating get() and set())."""
     game_path = Path(game_path)
     w = world.World(game_path)
     rooms = w.world_state["rooms"]
     game_objects = w.world_state["game_objects"]
-    player_handle = w.world_state["player_handle"]
+    player_handle = w.player_handle
     start_room = w.current_room
     dialogue_dir = game_path / "dialogue"
 
     # Map NPC dialogues
     npc_dialogue_graphs: dict[str, dict[str, set[str]]] = {}
     npc_get_conditions: dict[str, dict[str, list[tuple[str, str, bool]]]] = {}
+    npc_set_mutations: dict[str, dict[str, list[tuple[str, Any]]]] = {}
 
     for obj_id, obj_data in game_objects.items():
         if obj_id == player_handle:
@@ -63,9 +67,10 @@ def validate_quests(game_path: Path | str) -> list[str]:
             ink_file = find_ink_path(f"{ink_ref}.ink", dialogue_dir)
             if ink_file and ink_file.exists():
                 try:
-                    graph, _, get_conds = analyze_ink_file(f"{ink_ref}.ink", dialogue_dir, game_path)
+                    graph, _, get_conds, set_muts = analyze_ink_file(f"{ink_ref}.ink", dialogue_dir, game_path)
                     npc_dialogue_graphs[obj_id] = graph
                     npc_get_conditions[obj_id] = get_conds
+                    npc_set_mutations[obj_id] = set_muts
                 except (OSError, ValueError, TypeError):
                     pass
 
@@ -85,6 +90,30 @@ def validate_quests(game_path: Path | str) -> list[str]:
     problem.add_fluent(at_knot, default_initial_value=False)
     problem.add_fluent(in_explore, default_initial_value=True)
     problem.add_fluent(in_dialogue, default_initial_value=False)
+
+    # Collect all bound variables for get & set
+    all_bound_vars: set[str] = set()
+    for npc_id, cond_map in npc_get_conditions.items():
+        for knot_name, cond_list in cond_map.items():
+            for c in cond_list:
+                all_bound_vars.add(_bind_var_path(c[1], npc_id, w))
+    for npc_id, mut_map in npc_set_mutations.items():
+        for knot_name, mut_list in mut_map.items():
+            for m in mut_list:
+                all_bound_vars.add(_bind_var_path(m[0], npc_id, w))
+
+    var_fluents_true: dict[str, Any] = {}
+    var_fluents_false: dict[str, Any] = {}
+    for idx, bound_var in enumerate(sorted(all_bound_vars)):
+        fl_true = up.Fluent(f"var_{idx}_true")
+        fl_false = up.Fluent(f"var_{idx}_false")
+        problem.add_fluent(fl_true, default_initial_value=False)
+        problem.add_fluent(fl_false, default_initial_value=True)
+        init_val = _evaluate_initial_state(bound_var, w)
+        problem.set_initial_value(fl_true, init_val)
+        problem.set_initial_value(fl_false, not init_val)
+        var_fluents_true[bound_var] = fl_true
+        var_fluents_false[bound_var] = fl_false
 
     # Add room objects
     room_objs: dict[str, Any] = {}
@@ -140,38 +169,58 @@ def validate_quests(game_path: Path | str) -> list[str]:
             talk_act.add_effect(in_explore, False)
             talk_act.add_effect(in_dialogue(npc_obj), True)
             talk_act.add_effect(at_knot(npc_obj, knot_objs["__root__"]), True)
+            # Apply set mutations from __root__
+            for set_k, set_v in npc_set_mutations.get(npc_id, {}).get("__root__", []):
+                bound_k = _bind_var_path(set_k, npc_id, w)
+                if bound_k in var_fluents_true:
+                    val_bool = bool(set_v)
+                    talk_act.add_effect(var_fluents_true[bound_k], val_bool)
+                    talk_act.add_effect(var_fluents_false[bound_k], not val_bool)
             problem.add_action(talk_act)
 
         get_conds = npc_get_conditions.get(npc_id, {})
+        set_muts = npc_set_mutations.get(npc_id, {})
         for src_knot, targets in graph.items():
             if src_knot not in knot_objs:
                 continue
             src_conds = get_conds.get(src_knot, [])
             for tgt_knot in targets:
-                # Check if tgt_knot is governed by a get() guard
-                cond_matches = [c for c in src_conds if c[0] == tgt_knot]
-                if cond_matches:
-                    _, var_path, negated = cond_matches[0]
-                    val = _evaluate_get_condition(var_path, npc_id, w)
-                    condition_satisfied = (not val) if negated else val
-                    if not condition_satisfied:
-                        continue  # Prune invalid branch transition
-
-                if tgt_knot in ("done", "END"):
-                    end_act = up.InstantaneousAction(f"end_dialogue_{npc_id}_{src_knot}")
-                    end_act.add_precondition(in_dialogue(npc_obj))
-                    end_act.add_precondition(at_knot(npc_obj, knot_objs[src_knot]))
-                    end_act.add_effect(in_dialogue(npc_obj), False)
-                    end_act.add_effect(at_knot(npc_obj, knot_objs[src_knot]), False)
-                    end_act.add_effect(in_explore, True)
-                    problem.add_action(end_act)
-                elif tgt_knot in knot_objs:
+                if tgt_knot in knot_objs:
                     branch_act = up.InstantaneousAction(f"branch_{npc_id}_{src_knot}_to_{tgt_knot}")
                     branch_act.add_precondition(in_dialogue(npc_obj))
                     branch_act.add_precondition(at_knot(npc_obj, knot_objs[src_knot]))
                     branch_act.add_effect(at_knot(npc_obj, knot_objs[src_knot]), False)
                     branch_act.add_effect(at_knot(npc_obj, knot_objs[tgt_knot]), True)
+
+                    # Check get() guards for this target
+                    cond_matches = [c for c in src_conds if c[0] == tgt_knot]
+                    for cond in cond_matches:
+                        _, var_path, negated = cond
+                        bound_k = _bind_var_path(var_path, npc_id, w)
+                        if bound_k in var_fluents_true:
+                            if negated:
+                                branch_act.add_precondition(var_fluents_false[bound_k])
+                            else:
+                                branch_act.add_precondition(var_fluents_true[bound_k])
+
+                    # Apply set() mutations from target knot
+                    for set_k, set_v in set_muts.get(tgt_knot, []):
+                        bound_k = _bind_var_path(set_k, npc_id, w)
+                        if bound_k in var_fluents_true:
+                            val_bool = bool(set_v)
+                            branch_act.add_effect(var_fluents_true[bound_k], val_bool)
+                            branch_act.add_effect(var_fluents_false[bound_k], not val_bool)
+
                     problem.add_action(branch_act)
+
+            # End dialogue action to return to explore
+            end_act = up.InstantaneousAction(f"end_dialogue_{npc_id}_{src_knot}")
+            end_act.add_precondition(in_dialogue(npc_obj))
+            end_act.add_precondition(at_knot(npc_obj, knot_objs[src_knot]))
+            end_act.add_effect(in_dialogue(npc_obj), False)
+            end_act.add_effect(at_knot(npc_obj, knot_objs[src_knot]), False)
+            end_act.add_effect(in_explore, True)
+            problem.add_action(end_act)
 
     # Test reachability of every knot for every reachable NPC dialogue
     unreachable_knots: list[str] = []

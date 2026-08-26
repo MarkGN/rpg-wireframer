@@ -1,4 +1,5 @@
 inherits: blackbelt
 name: Karate Master
 description: A *really* buff guy in a gi.
+beaten: false
 chose_hitmon: false

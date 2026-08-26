@@ -232,7 +232,7 @@ class World:
             for key, value in data.items():
                 quest[key] = value
 
-            quest.setdefault("stage", 0)
+            quest.setdefault("completed", 0)
             self.world_state["quests"][quest_id] = quest
 
         # Global flags
