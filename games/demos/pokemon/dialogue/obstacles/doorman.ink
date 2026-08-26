@@ -65,5 +65,7 @@ Seven badges. You still need the EarthBadge from Viridian City. Bring your A-gam
   Well done, sir.
   And good luck.
   ~ set("$self.passed", true)
+  ~ set("$self.accosts", true)
+  ~ move("$player", "rooms.$current_room", "rooms.$npc_room")
 }
 -> END
