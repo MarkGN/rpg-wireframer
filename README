@@ -89,9 +89,9 @@ tests/
 These should be YAML files. They often are NPCs, but can equally be treasure chests, puzzles, or vehicles. Their defining feature is to be interactive with some dialogue or other script. The following are keywords:
 
 accosts = False: If True, they talk to you as soon as you enter an area. Useful for enemies or shopkeepers.
-guards-exits = []: A list of exits. If you try to use the exit, this NPC will accost you and prevent it. Useful for doorkeepers.
+guards_exits = []: A list of exits. If you try to use the exit, this NPC will accost you and prevent it. Useful for doorkeepers.
 description = "": A description. This is used in text mode only, not exported, but it's good practice to document.
-guards-items = []: A list of items. If you try to take the item, this NPC will accost you and prevent it.
+guards_items = []: A list of items. If you try to take the item, this NPC will accost you and prevent it.
 name = "": Their display name.
 interact_prompt = "Talk to": The word the text runner uses to indicate interacting with this. Use "Open" for a treasure chest, "Pick" for a fruit tree, or "Loot" for a corpse.
 inventory = []: A list of items. You might use inventory to store other game objects you might collect such as skills: you might not in your final game, but it can simplify your code for the wireframe.
