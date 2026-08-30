@@ -34,19 +34,21 @@ class Explore(Context):
             # go to location
             exits = world.world_state["rooms"][world.current_room].get("exits", {})
             if target in exits:
+                destination = exits[target]
                 blocking = world.check_block("exits", target)
                 if blocking:
-                    world.push_context("dialogue", npc=blocking)
+                    world.push_context("dialogue", npc=blocking, target_room=destination)
                     return
-                destination = exits[target]
-                previous = world.current_room
+                accosting = None
+                for npc_id in world.world_state["rooms"][destination].get("objects", []):
+                    if world.world_state["game_objects"].get(npc_id, {}).get("accosts", False):
+                        accosting = npc_id
+                        break
+                if accosting:
+                    world.push_context("dialogue", npc=accosting, target_room=destination)
+                    return
                 world.move_object(world.player_handle, world.current_room, destination)
                 world.check_quest_triggers("enter_room", destination)
-                accosting = world.check_accost()
-                if accosting:
-                    world.move_object(world.player_handle, world.current_room, previous)
-                    world.push_context("dialogue", npc=accosting)
-                    return
             else:
                 return ValueError(f"Invalid action: {verb} {target}")
         elif verb in {InteractType.TALK, TALK}:

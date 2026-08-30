@@ -475,8 +475,8 @@ class World:
     def get_context(self) -> Context:
         return self.context_stack[-1]
 
-    def push_context(self, context: str, scenario="None", npc=None) -> None:
-        ctx = self.context_factory.create(context, scenario, npc)
+    def push_context(self, context: str, scenario="None", npc=None, **kwargs) -> None:
+        ctx = self.context_factory.create(context, scenario, npc, **kwargs)
         self.context_stack.append(ctx)
         ctx.on_enter(self)
 

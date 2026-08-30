@@ -27,7 +27,7 @@ class Dialogue(Context):
     Walking around the world map.
     """
 
-    def __init__(self, npc):
+    def __init__(self, npc, **kwargs):
         self.npc: str = npc
         self.current_speaker = npc
         self.last_text: str = ""
@@ -37,6 +37,7 @@ class Dialogue(Context):
         self.external_texts: list[str] = []
         self.pending_scenario: str | None = None
         self._pending_choice_text: str | None = None
+        self._target_room: str | None = kwargs.get("target_room")
 
     def on_enter(self, world: World) -> None:
         """
@@ -126,9 +127,14 @@ class Dialogue(Context):
         def ext_at_npc(npc: str):
             return npc in world.npcs_in_room()
 
-        def ext_move_npc(npc: str, source_room: str, destination_room: str):
-            print("dialogic", (binder(npc).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1]), destination_room, world.find_npc(self.npc), binder("rooms.$self_room"))
-            world.move_object(binder(npc).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1])
+        def ext_move_npc(game_object: str, source_room: str, destination_room: str):
+            world.move_object(binder(game_object).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1])
+
+        def ext_pass() -> None:
+            """Move the player into the room that was blocked when this dialogue began."""
+            target_room = self._target_room
+            if target_room is not None:
+                world.move_object(world.player_handle, world.current_room, target_room)
 
         def ext_scenario(script: str):
             self.pending_scenario = script
@@ -161,6 +167,7 @@ class Dialogue(Context):
         self.story.BindExternalFunction("scenario", ext_scenario)
         self.story.BindExternalFunction("parse_inventory", ext_parse_inventory)
         self.story.BindExternalFunction("speaker", ext_speaker)
+        self.story.BindExternalFunction("pass", ext_pass)
 
         custom_externals = load_custom_externals_definitions(dialogue_dir)
         for name, arg_count in custom_externals.items():

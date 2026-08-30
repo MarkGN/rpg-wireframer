@@ -5,12 +5,12 @@ from .contexts.shop import Shop
 
 
 class ContextFactory:
-    def create(self, context, scenario, npc):
+    def create(self, context, scenario, npc, **kwargs):
         match context:
             case "explore":
                 return Explore()
             case "dialogue":
-                return Dialogue(npc)
+                return Dialogue(npc, **kwargs)
             case "encounter":
                 return Encounter(scenario["outcomes"])
             case "shop":
