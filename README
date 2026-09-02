@@ -14,13 +14,9 @@ For the text runner only:
 
 `pip install pyyaml inkpython`
 
-`python runners/text.py`
+`make run GAME=<game_path>`
 
-For the visual runner:
-
-`pip install pygame`
-
-`python runners/visual.py`
+e.g. `make run GAME=games/demos/toy`
 
 This will create a project with some dummy data. Feel free to delete all .yaml and .ink files except pc.yaml, which you can edit but not delete. You might want to leave them there awhile as bonus documentation.
 
@@ -28,11 +24,14 @@ To test:
 
 `pip install pytest`
 
-`python -m pytest`
+`make test`
 
 # Directory structure
 ├── games
 │   ├── demos
+│   │   ├── pokemon
+│   │   │   ├── dialogue
+│   │   │   └── world
 │   │   └── toy
 │   │       ├── assets
 │   │       │   ├── maps
@@ -50,18 +49,24 @@ To test:
 │   └── local
 ├── Makefile
 ├── README
-└── runners
-    ├── binder.py
-    ├── context.py
-    ├── contexts
-    │   ├── encounter.py
-    │   ├── dialogue.py
-    │   ├── explore.py
-    │   └── shop.py
-    ├── factory.py
-    ├── __init__.py
-    ├── text.py
-    └── world.py
+├── runners
+│   ├── action.py
+│   ├── binder.py
+│   ├── context.py
+│   ├── context_independent_actions.py
+│   ├── contexts
+│   │   ├── dialogue.py
+│   │   ├── encounter.py
+│   │   ├── explore.py
+│   │   └── shop.py
+│   ├── factory.py
+│   ├── __init__.py
+│   ├── presentation.py
+│   ├── text.py
+│   └── world.py
+├── tests
+│   └── validate
+└── validate
 
 world/
   items/        // .yaml files
@@ -76,22 +81,26 @@ assets/
   maps/         // .png or other image files
   sprites/      // .png or other image files
 runners/
+  action.py     // action types and rendering
   binder.py     // tools for binding variables to .ink and .yaml files
+  context.py    // abstract base class for all game contexts
+  context_independent_actions.py // actions available in any context (quit, inventory, quest log)
   contexts/     // provides various game contexts: explore, dialogue, shop, encounter
   factory.py    // constructs game contexts
-  text.py       // provides a text-only interface to engine.py
+  presentation.py // formatting helpers for text output
+  text.py       // provides a text-only interface to world.py
   world.py      // provides core step-through logic
 tests/
-  engine/       // tests confirming the engine achieves expected state after given inputs
+  validate/     // tests confirming validators achieve expected results for given world states
 
 # GameObjects
 
 These should be YAML files. They often are NPCs, but can equally be treasure chests, puzzles, or vehicles. Their defining feature is to be interactive with some dialogue or other script. The following are keywords:
 
-accosts = False: If True, they talk to you as soon as you enter an area. Useful for enemies or shopkeepers.
-guards_exits = []: A list of exits. If you try to use the exit, this NPC will accost you and prevent it. Useful for doorkeepers.
-description = "": A description. This is used in text mode only, not exported, but it's good practice to document.
-guards_items = []: A list of items. If you try to take the item, this NPC will accost you and prevent it.
+accosts = False: If True, the player cannot move into their room. Instead, dialogue with this object begins immediately. Useful for enemies or shopkeepers that should intercept the player. Once the dialogue clears the flag (e.g. via `~ set("$self.accosts", false)`), subsequent movement into the room succeeds normally.
+guards_exits = []: A list of exits in the current room. If you try to use one of those exits, this object will intercept you and begin dialogue. Useful for doorkeepers.
+description = "": A description. It's good practice to document.
+guards_items = []: A list of items. If you try to take any of these items, this object will intercept you and begin dialogue.
 name = "": Their display name.
 interact_prompt = "Talk to": The word the text runner uses to indicate interacting with this. Use "Open" for a treasure chest, "Pick" for a fruit tree, or "Loot" for a corpse.
 inventory = []: A list of items. You might use inventory to store other game objects you might collect such as skills: you might not in your final game, but it can simplify your code for the wireframe.
@@ -116,19 +125,7 @@ These are functions you're likely to use in a lot of games. Values can be nested
 
 Return the variable's value. Only usable for numbers.
 
-`It'll cost you {item.price} gold.`
-
-`get_str("var_name")`: `var_name` some string global variable.
-
-Return the variable's value. Only usable for strings.
-
-`Pleased to meet you, {player.name}!`
-
-`increase("var_name", amount)`: `var_name` some numeric global variable, `amount` numeric. 
-
-Increase a variable by some amount. Set `amount` negative to subtract.
-
-`~ increase(player.gold, item.price)`
+`It'll cost you {get(item.price)} gold.`
 
 `set("var_name", value)`: `var_name` some global variable, `value` some value.
 
@@ -136,60 +133,76 @@ Set a variable to some value.
 
 `~ set("player.hp", get("player.max_hp"))`
 
-`spend(var_name, amount)`: `var_name` some numeric global variable, `amount` numeric > 0.
+`increase("var_name", amount)`: `var_name` some numeric global variable, `amount` numeric.
 
-Check if a variable is higher than some amount and subtract if so and return true, otherwise return false. Useful for buying things.
+Increase a variable by some amount. Set `amount` negative to subtract.
 
-`{ spend("player.gold", "item.price"):`
-`  ~ add("player.inventory", item)`
-`    Thank you, please come again.`
-`  - else:`
-`    You can't afford it.`
-`}`
+`~ increase("player.gold", item.price)`
 
-`shop(stock, restock=True, sells=True, buys=False, sell_markup=1, buy_discount = 0.5)`: `stock` a list of object with names and prices, `restock` a boolean for whether it should provide unlimited items as opposed to depleting, `sells` a boolean for whether the shopkeeper sells to the player, `buys` a boolean for whether the shop buys from the player, `sell_markup` a multiplier for how many times an item's price do they charge to buy, `buy_discount` a multiplier for how many times an item's price will they pay for it.
+`transfer(donor, recipient, value)`: Transfer a numeric `value` from `donor` to `recipient`, or transfer an item between two inventories if `value` is a list.
 
-Create a shop dialogue.
+`~ transfer("alice.inventory", "player.inventory", ["gem"])`
 
-` ~ shop("alice.inventory", false)`
+`loot()`: Move all items from the calling object's inventory to the player's inventory.
 
-`has(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
+`~ loot()`
 
-See if a list contains an item. Can check if it has a certain amount of an item.
+`has(list_name, item)`: `list_name` some global variable that's a list, `item` an item.
 
-`~ has("player.inventory", "gold_piece", 10)`
+See if a list contains an item.
 
-`add(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
+`~ has("player.inventory", "gold_piece")`
+
+`add(list_name, item)`: `list_name` some global variable that's a list, `item` an item.
 
 Add an item to a list.
 
 `~ add("player.inventory", item)`
 
-`remove(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
+`remove(list_name, item)`: `list_name` some global variable that's a list, `item` an item.
 
-Remove an item (or multiple copies of it) from a list.
+Remove an item from a list.
 
 `~ remove("player.inventory", "invitation")`
 
-`sell(list_name, item, amount=1)`: `list_name` some global variable that's a list, `item` an item, `amount` a positive integer.
+`shop(inventory)`: `inventory` a handle to the shopkeeper's inventory.
 
-Check if a list contains (some amount of copies of) an item and remove them. Useful for selling things.
+Push a shop context for the given inventory.
 
-`{ sell("player.inventory", gem):`
-`  ~ add("player.gold", get("gem.price"))`
-`    Thank you, please come again.`
-`  - else:`
-`    You can't sell what you don't have.`
+`~ shop("alice.inventory")`
+
+`present(npc)`: `npc` an NPC handle.
+
+Check if an NPC is present in the current room.
+
+`{ present("bob"):`
+`    Bob's here too.`
 `}`
 
-`at(npc, map)`: `npc` an NPC hanlde, `map` a map handle.
+`move(npc, source, destination)`: `npc` an NPC handle, `source` a room handle, `destination` a room handle.
 
-Check if an NPC is in a map.
+Move an NPC from one room to another.
 
-`~ at("bob", highway_melbourne_sydney)`
+`~ move("alice", "town_square", "market")`
 
-`move(npc, to)`: `npc` an NPC handle, `to` a map handle.
+`pass()`: Only meaningful when this dialogue was triggered by a blocked movement (accosts or guards_exits). Immediately moves the player into the room they were trying to reach.
 
-Move an NPC to a map or list of maps.
+`~ pass()`
 
-`~ move("alice", "")` # remove her from game world
+`scenario(handle)`: `handle` a scenario file handle.
+
+Push a new context defined by a scenario YAML file.
+
+`~ scenario("fight_wolves")`
+
+`parse_inventory(obj)`: `obj` a game object handle.
+
+Return the object's inventory as a human-readable string ("nothing", "a sword", "a sword and a shield", etc.).
+
+`You're carrying {parse_inventory("player")}.`
+
+`speaker(npc)`: `npc` an NPC handle.
+
+Switch the active speaker to the named NPC. In the text runner, shows who's speaking. In a prod game, should choose portrait, camera focus, etc.
+
+`~ speaker("bob")`
