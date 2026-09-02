@@ -20,9 +20,13 @@ from .presentation import (
 from .world import World
 
 
+def get_input(prompt: str) -> str:
+    return input(prompt)
+
+
 def main() -> None:
     game_dir = argv[1]
-    world = World(Path(f"{game_dir}"))
+    world = World(Path(f"{game_dir}"), custom_external_input=get_input)
 
     while True:
         # get and print context from world

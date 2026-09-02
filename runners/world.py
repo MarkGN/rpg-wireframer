@@ -31,8 +31,9 @@ def load_yaml(path: Path) -> dict:
 # world_state["<npc_id>"] — per-NPC variables (hp, money, flags, …)
 # world_state["global"]  — room flags and anything not tied to an entity
 class World:
-    def __init__(self, game_path: Path):
+    def __init__(self, game_path: Path, custom_external_input: Any = None):
         self.game_path = game_path
+        self.custom_external_input = custom_external_input
         world_dir = game_path / "world"
         self.rooms_dir: Path = world_dir / "rooms"
         self.game_objects_dir: Path = world_dir / "game_objects"

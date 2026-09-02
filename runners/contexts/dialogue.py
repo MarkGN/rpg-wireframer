@@ -14,6 +14,7 @@ from typing import Any
 import inkpython
 import yaml
 from inkpython import Story
+from inkpython.engine.control_command import ControlCommand
 
 from ..action import Action, InteractType
 from ..binder import Binder
@@ -38,6 +39,7 @@ class Dialogue(Context):
         self.pending_scenario: str | None = None
         self._pending_choice_text: str | None = None
         self._target_room: str | None = kwargs.get("target_room")
+        self.world: World | None = None
 
     def on_enter(self, world: World) -> None:
         """
@@ -53,6 +55,7 @@ class Dialogue(Context):
             move(npc, location)
             shop(inventory)
         """
+        self.world = world
         meta = world.world_state["game_objects"].get(self.npc, {})
         dialogue_dir = Path(world.game_path) / "dialogue"
         json_path = ink_json_path(meta.get("ink", f"{self.npc}") + ".ink", dialogue_dir)
@@ -420,6 +423,40 @@ def load_custom_externals_definitions(dialogue_dir: Path) -> dict[str, int]:
     return custom_externals
 
 
+def is_control_flow_guard(story: Story | None) -> bool:
+    if story is None or getattr(story, "state", None) is None:
+        return False
+    current_pointer = getattr(story.state, "currentPointer", None)
+    if current_pointer is None:
+        return False
+    container = getattr(current_pointer, "container", None)
+    if container is None or not hasattr(container, "content"):
+        return False
+    content = container.content
+    index = getattr(current_pointer, "index", -1)
+    if 0 <= index + 1 < len(content):
+        next_cmd = content[index + 1]
+        if isinstance(next_cmd, ControlCommand):
+            return next_cmd.commandType != ControlCommand.CommandType.PopEvaluatedValue
+        return True
+    return False
+
+
+def parse_custom_external_input(raw: Any) -> Any:
+    if not isinstance(raw, str):
+        return raw
+    val = raw.strip()
+    try:
+        return int(val)
+    except ValueError:
+        pass
+    try:
+        return float(val)
+    except ValueError:
+        pass
+    return raw
+
+
 def make_custom_external_function(name: str, arg_count: int, dialogue: Dialogue):
     def ext(*args: Any):
         if len(args) != arg_count:
@@ -432,6 +469,21 @@ def make_custom_external_function(name: str, arg_count: int, dialogue: Dialogue)
                 formatted_args.append(f'"{arg}"')
             else:
                 formatted_args.append(str(arg))
-        dialogue.external_texts.append(f"~ {name}({', '.join(formatted_args)})")
+        call_str = f"{name}({', '.join(formatted_args)})"
+
+        if is_control_flow_guard(dialogue.story):
+            prompt = f"Custom external {call_str} found: please provide value\n"
+            world = dialogue.world
+            if (
+                world is not None
+                and getattr(world, "custom_external_input", None) is not None
+                and callable(world.custom_external_input)
+            ):
+                raw = world.custom_external_input(prompt)
+            else:
+                raw = input(prompt)
+            return parse_custom_external_input(raw)
+
+        dialogue.external_texts.append(f"~ {call_str}")
 
     return ext
