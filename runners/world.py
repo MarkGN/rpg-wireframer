@@ -209,7 +209,7 @@ class World:
                     )
             room_data["objects"] = normalized_objects
 
-        # Build the current active game object map from room placement.
+        # Build the current active game object map from room placement and exit blockers.
         placed_objects: set[str] = set()
         for room_handle, room_data in self.world_state["rooms"].items():
             for obj_handle in room_data.get("objects", []):
@@ -218,6 +218,30 @@ class World:
                         f"Error: room {room_data['name']} references unknown game object '{obj_handle}'."
                     )
                 placed_objects.add(obj_handle)
+
+            exits = room_data.get("exits", {})
+            if isinstance(exits, dict):
+                for exit_name, exit_spec in exits.items():
+                    if isinstance(exit_spec, dict) and "blocker" in exit_spec:
+                        blocker_handle = exit_spec["blocker"]
+                        if blocker_handle:
+                            if blocker_handle not in resolved_game_objects:
+                                sys.exit(
+                                    f"Error: room {room_data.get('name', room_handle)} exit '{exit_name}' references unknown blocker '{blocker_handle}'."
+                                )
+                            placed_objects.add(blocker_handle)
+            elif isinstance(exits, list):
+                for exit_item in exits:
+                    if isinstance(exit_item, dict):
+                        for exit_name, exit_spec in exit_item.items():
+                            if isinstance(exit_spec, dict) and "blocker" in exit_spec:
+                                blocker_handle = exit_spec["blocker"]
+                                if blocker_handle:
+                                    if blocker_handle not in resolved_game_objects:
+                                        sys.exit(
+                                            f"Error: room {room_data.get('name', room_handle)} exit '{exit_name}' references unknown blocker '{blocker_handle}'."
+                                        )
+                                    placed_objects.add(blocker_handle)
 
         for obj_handle in sorted(placed_objects):
             self.world_state["game_objects"][obj_handle] = resolved_game_objects[
@@ -332,13 +356,24 @@ class World:
 
     # TODO start with current location, then fan out by exits: that's usually faster
     def find_npc(self, npc) -> str:
-        candidate_rooms = [key for (key, val) in self.world_state["rooms"].items() if npc in val["objects"]]
+        candidate_rooms = [key for (key, val) in self.world_state["rooms"].items() if npc in val.get("objects", [])]
         if candidate_rooms:
             return candidate_rooms[0]
-        else:
-            sys.exit(
-                f"Error: object {npc} not found"
-            )
+        for room_handle, room_data in self.world_state["rooms"].items():
+            exits = room_data.get("exits", {})
+            if isinstance(exits, dict):
+                for exit_spec in exits.values():
+                    if isinstance(exit_spec, dict) and exit_spec.get("blocker") == npc:
+                        return room_handle
+            elif isinstance(exits, list):
+                for exit_item in exits:
+                    if isinstance(exit_item, dict):
+                        for exit_spec in exit_item.values():
+                            if isinstance(exit_spec, dict) and exit_spec.get("blocker") == npc:
+                                return room_handle
+        sys.exit(
+            f"Error: object {npc} not found"
+        )
 
     def display_room(self) -> dict[str, Any]:
         output: dict[str, Any] = {}
@@ -400,6 +435,8 @@ class World:
                     target_file_pointer = exit_data
                 elif isinstance(exit_data, dict):
                     target_file_pointer = exit_data.get("room", target)
+                    if exit_data.get("blocker"):
+                        return exit_data.get("blocker")
 
             if target_file_pointer in self.world_state["rooms"]:
                 target_room_name = self.world_state["rooms"][target_file_pointer].get(

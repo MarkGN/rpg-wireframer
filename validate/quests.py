@@ -131,7 +131,11 @@ def validate_quests(game_path: Path | str) -> list[str]:
         if r_name not in room_objs:
             continue
         exits = r_data.get("exits", [])
-        next_rooms = exits.values() if isinstance(exits, dict) else exits
+        raw_next_rooms = exits.values() if isinstance(exits, dict) else exits
+        next_rooms = [
+            nxt.get("room", nxt) if isinstance(nxt, dict) else nxt
+            for nxt in raw_next_rooms
+        ]
         for nxt in next_rooms:
             if nxt in room_objs:
                 move_act = up.InstantaneousAction(f"move_{r_name}_to_{nxt}")

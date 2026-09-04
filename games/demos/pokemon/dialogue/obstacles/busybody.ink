@@ -4,11 +4,11 @@
 
 Badgeless guys aren't allowed through. Go beat Brock first.
 { has("$player.inventory", "boulder_badge"):
-  -> pass
+  -> passed
 }
 -> END
 
-== pass
+== passed
 ~ speaker("$player")
 I have a BoulderBadge.
 ~speaker("$self")
@@ -16,7 +16,7 @@ Oh. Well --
 ~speaker("$player")
 So how about you mind your damn business?
 ~ set("$self.accosts", 0)
-~ move("$player", "rooms.$current_room", "rooms.$npc_room")
+~ pass()
 -> END
 
 == snippy

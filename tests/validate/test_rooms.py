@@ -92,3 +92,23 @@ class TestDuplicateRoomNames:
 
         # Should not raise
         validate_world(game_dir)
+
+    def test_dict_exits_validation(self, tmp_path: Path) -> None:
+        """Rooms with {room: ..., blocker: ...} exit mappings should validate."""
+        game_dir = _create_game(
+            tmp_path,
+            {
+                "town_house.yaml": {
+                    "name": "Town House",
+                    "exits": {"East": "start"},
+                },
+                "start.yaml": {
+                    "name": "Start",
+                    "exits": {
+                        "West": {"room": "town_house", "blocker": "hero"},
+                    },
+                },
+            },
+        )
+
+        validate_world(game_dir)

@@ -31,9 +31,12 @@ def validate_world(game_path: Path | str) -> None:
         visited.add(current_room)
         exits = rooms[current_room].get("exits", [])
         if isinstance(exits, dict):
-            next_rooms = exits.values()
+            raw_targets = exits.values()
         else:
-            next_rooms = exits
+            raw_targets = exits
+        next_rooms = [
+            t.get("room", t) if isinstance(t, dict) else t for t in raw_targets
+        ]
         for next_room in next_rooms:
             if next_room in rooms and next_room not in visited:
                 stack.append(next_room)
