@@ -447,8 +447,8 @@ def validate_quests(
             destination_room = resolve_move_destination(destination, npc_id)
             if destination_room is None:
                 continue
-            for room_name in room_objs.items():
-                action.add_effect(at_room(room_name), False)
+            for room in room_objs.values():
+                action.add_effect(at_room(room), False)
             action.add_effect(at_room(room_objs[destination_room]), True)
 
     def add_pass_effects(action: Any, npc_id: str) -> None:
@@ -456,9 +456,9 @@ def validate_quests(
             if interceptor != npc_id:
                 continue
             condition = pending_move(room_objs[destination])
-            for room_name in room_objs:
+            for room in room_objs.values():
                 action.add_effect(
-                    at_room(room_name), False, condition=condition
+                    at_room(room), False, condition=condition
                 )
             action.add_effect(at_room(room_objs[destination]), True, condition=condition)
             action.add_effect(pending_move(room_objs[destination]), False)
@@ -730,8 +730,8 @@ def validate_quests(
         intercept_act.add_effect(
             at_knot(problem.object(npc_id), knot_objs["__root__"]), True
         )
-        for room_name, value in room_objs.items():
-            intercept_act.add_effect(pending_move(room_name), False)
+        for room in room_objs.values():
+            intercept_act.add_effect(pending_move(room), False)
         intercept_act.add_effect(pending_move(room_objs[destination]), True)
         for set_k, set_v in npc_set_mutations.get(npc_id, {}).get("__root__", []):
             bound_k = resolve_bound_path(set_k, npc_id)
