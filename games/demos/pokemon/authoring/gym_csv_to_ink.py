@@ -17,7 +17,7 @@ from pathlib import Path
 # Columns expected in the CSV (order doesn't matter, header names do)
 REQUIRED_FIELDS = ["id", "challenge", "win", "badge", "tm", "post_victory", "lose"]
 
-INK_TEMPLATE = """{{ has("$player.inventory", "{badge_item}"):
+INK_TEMPLATE = """{{ has("$player.inventory", "{badge}_badge"):
     -> post_victory
    - else:
     -> challenge
@@ -31,8 +31,9 @@ INK_TEMPLATE = """{{ has("$player.inventory", "{badge_item}"):
 == win
 ~ victory()
 {win}
-~ add("$player.inventory", "{badge_item}")
+~ add("$player.inventory", "{badge}_badge")
 ~ add("$player.inventory", "{tm_item}")
+~ set("quests.{badge}.completed", 1)
 -> END
 
 == lose
@@ -82,11 +83,11 @@ def load_rows(csv_path: Path):
 
 
 def row_to_ink(row: dict) -> str:
-    badge_item = f"{row['badge'].strip()}_badge"
+    badge = f"{row['badge'].strip()}"
     tm_item = f"tm_{row['tm'].strip()}"
 
     return INK_TEMPLATE.format(
-        badge_item=badge_item,
+        badge=badge,
         tm_item=tm_item,
         challenge=unescape_field(row["challenge"]),
         win=unescape_field(row["win"]),

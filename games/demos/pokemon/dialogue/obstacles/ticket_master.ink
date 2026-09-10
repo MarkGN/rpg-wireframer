@@ -7,7 +7,7 @@
 
 You need a ticket to board this ship.
 { has("$player.inventory", "anne_ticket"):
-  -> pass
+  -> passing
 }
 -> END
 
@@ -23,11 +23,11 @@ Never. It will never return. It was dynamited.
 Hey, {get("$player.name")}. I remember you: go ahead.
 -> END
 
-== pass
+== passing
 ~ speaker("$player")
 I have a ticket.
 ~ speaker("$self")
 So you do. Go ahead.
 ~ set("$self.accosts", 0)
-~ move("$player", "rooms.$current_room", "rooms.$npc_room")
+~ pass()
 -> END

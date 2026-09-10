@@ -16,6 +16,7 @@ You're still a jerk! And Giovanni says I have to practise my waterboarding, so .
 Shoot. Don't tell the Boss. Here's a badge and TM.
 ~ add("$player.inventory", "cascade_badge")
 ~ add("$player.inventory", "tm_11")
+~ set("quests.cascade.completed", 1)
 -> END
 
 == lose

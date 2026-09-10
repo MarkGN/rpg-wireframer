@@ -14,6 +14,7 @@ Hey. Let's rock!
 I was too stoned to win. Have a badge and a TM.
 ~ add("$player.inventory", "boulder_badge")
 ~ add("$player.inventory", "tm_34")
+~ set("quests.boulder.completed", 1)
 -> END
 
 == lose

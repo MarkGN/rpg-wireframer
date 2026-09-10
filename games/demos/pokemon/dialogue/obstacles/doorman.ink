@@ -22,7 +22,7 @@
 { not has("$player.inventory", "earth_badge"):
   -> earth
 }
--> pass
+-> passing
 
 == boulder
 Kid, I'm not letting you into an endgame biome without any badges. Start at Pewter City.
@@ -56,7 +56,7 @@ Six badges. Not bad. But still not enough. Go to Cinnabar Island and get a Volca
 Seven badges. You still need the EarthBadge from Viridian City. Bring your A-game. That gym leader doesn't play.
 -> END
 
-== pass
+== passing
 { get("$self.passed"):
   Hey, {get("$player.name")}. Good luck out there.
 - else:
@@ -66,6 +66,7 @@ Seven badges. You still need the EarthBadge from Viridian City. Bring your A-gam
   And good luck.
   ~ set("$self.passed", true)
   ~ set("$self.accosts", true)
-  ~ move("$player", "rooms.$current_room", "rooms.$npc_room")
+  ~ set("quests.champion.completed", 1)
+  ~ pass()
 }
 -> END

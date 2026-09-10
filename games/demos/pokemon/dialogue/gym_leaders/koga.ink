@@ -18,6 +18,7 @@ zzz
 (you go through his pockets and get a badge and TM)
 ~ add("$player.inventory", "soul_badge")
 ~ add("$player.inventory", "tm_06")
+~ set("quests.soul.completed", 1)
 -> END
 
 == lose

@@ -14,6 +14,7 @@ No boys allowed.
 Feminism is dead, and thus, so am I. Have my worldly belongings.
 ~ add("$player.inventory", "rainbow_badge")
 ~ add("$player.inventory", "tm_21")
+~ set("quests.rainbow.completed", 1)
 -> END
 
 == lose

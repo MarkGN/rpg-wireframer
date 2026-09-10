@@ -16,6 +16,7 @@ We should swap.
 Uck. Now I have neither badge.
 ~ add("$player.inventory", "marsh_badge")
 ~ add("$player.inventory", "tm_46")
+~ set("quests.marsh.completed", 1)
 -> END
 
 == lose

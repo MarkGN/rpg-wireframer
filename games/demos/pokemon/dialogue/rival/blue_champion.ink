@@ -10,7 +10,7 @@ Here we go.
 == win
 ...
 Good game.
-~ set("quests.champion.complete", 1)
+~ set("quests.champion.completed", 1)
 -> END
 
 == lose

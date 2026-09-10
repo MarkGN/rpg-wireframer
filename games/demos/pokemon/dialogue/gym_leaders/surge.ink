@@ -14,6 +14,7 @@ Are you man enough to fight me?
 Sonic boom!
 ~ add("$player.inventory", "thunder_badge")
 ~ add("$player.inventory", "tm_14")
+~ set("quests.thunder.completed", 1)
 -> END
 
 == lose

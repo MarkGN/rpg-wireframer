@@ -19,6 +19,7 @@ import yaml
 from runners import world
 from runners.binder import Binder
 from validate.ink_analyser import (
+    PASS_MOVE_DESTINATION,
     _collect_reachable_knots,
     analyze_ink_file,
     find_ink_path,
@@ -217,6 +218,7 @@ def validate_quests(
     npc_set_mutations: dict[str, dict[str, list[tuple[str, Any]]]] = {}
     npc_has_conditions: dict[str, dict[str, list[tuple[str, str, str, bool]]]] = {}
     npc_list_mutations: dict[str, dict[str, list[tuple[str, str, bool]]]] = {}
+    npc_move_mutations: dict[str, dict[str, list[tuple[str, str, str]]]] = {}
 
     for obj_id, obj_data in game_objects.items():
         if obj_id == player_handle:
@@ -234,12 +236,14 @@ def validate_quests(
                         set_muts,
                         has_conds,
                         list_muts,
+                        move_muts,
                     ) = analyze_ink_file(f"{ink_ref}.ink", dialogue_dir, game_path)
                     npc_dialogue_graphs[obj_id] = graph
                     npc_get_conditions[obj_id] = get_conds
                     npc_set_mutations[obj_id] = set_muts
                     npc_has_conditions[obj_id] = has_conds
                     npc_list_mutations[obj_id] = list_muts
+                    npc_move_mutations[obj_id] = move_muts
                 except (OSError, ValueError, TypeError):
                     pass
 
@@ -254,6 +258,7 @@ def validate_quests(
         mut_map = npc_set_mutations.get(npc_id, {})
         has_map = npc_has_conditions.get(npc_id, {})
         list_map = npc_list_mutations.get(npc_id, {})
+        move_map = npc_move_mutations.get(npc_id, {})
         dyn = any(
             bool(cond_list) for knot_name, cond_list in cond_map.items() if knot_name in reachable_knots
         ) or any(
@@ -262,14 +267,101 @@ def validate_quests(
             bool(has_list) for knot_name, has_list in has_map.items() if knot_name in reachable_knots
         ) or any(
             bool(list_list) for knot_name, list_list in list_map.items() if knot_name in reachable_knots
+        ) or any(
+            bool(move_list) for knot_name, move_list in move_map.items() if knot_name in reachable_knots
         )
         if not dyn:
             unreachable = sorted(set(graph) - reachable_knots)
             static_unreachable_knots.extend(f"{npc_id}:{knot}" for knot in unreachable)
             continue
         stateful_npc_dialogues[npc_id] = graph
-
     player_inv_path = resolve_bound_path("$player.inventory", player_handle)
+
+    def exit_destination(room_data: dict[str, Any], target: str) -> str | None:
+        exits = room_data.get("exits", {})
+        exit_data = exits.get(target) if isinstance(exits, dict) else None
+        if isinstance(exit_data, dict):
+            return exit_data.get("room", target)
+        if isinstance(exit_data, str):
+            return exit_data
+        return target if target in rooms else None
+
+    def guard_matches(
+        guard: str, target: str, destination: str | None
+    ) -> bool:
+        if guard == target or guard == destination:
+            return True
+        if destination in rooms:
+            return guard == rooms[destination].get("name")
+        return False
+
+    def resolve_move_destination(destination: str, npc_id: str) -> str | None:
+        bound_destination = resolve_bound_path(destination, npc_id)
+        if bound_destination.startswith("rooms."):
+            room_id = bound_destination.removeprefix("rooms.")
+            return room_id if room_id in rooms else None
+        if bound_destination in rooms:
+            return bound_destination
+        if destination in rooms:
+            return destination
+        return None
+
+    def move_targets_player(target: str, npc_id: str) -> bool:
+        return resolve_bound_path(target, npc_id) in {
+            player_handle,
+            f"game_objects.{player_handle}",
+        }
+
+    movement_interceptors: dict[tuple[str, str], str] = {}
+    movement_accost_interceptors: set[tuple[str, str]] = set()
+    movement_accost_paths: set[str] = set()
+    for source, room_data in rooms.items():
+        exits = room_data.get("exits", {})
+        if not isinstance(exits, dict):
+            continue
+        source_objects = room_data.get("objects", [])
+        for target, exit_data in exits.items():
+            destination = exit_destination(room_data, target)
+            if destination not in rooms:
+                continue
+            interceptor = (
+                exit_data.get("blocker")
+                if isinstance(exit_data, dict)
+                else None
+            )
+            if interceptor is None:
+                for object_id in source_objects:
+                    object_data = game_objects.get(object_id, {})
+                    guards = object_data.get("guards_exits", [])
+                    if isinstance(guards, str):
+                        guards = [guards]
+                    elif isinstance(guards, dict):
+                        guards = list(guards)
+                    if any(
+                        isinstance(guard, str)
+                        and guard_matches(guard, target, destination)
+                        for guard in guards
+                    ):
+                        interceptor = object_id
+                        break
+            if interceptor is None:
+                for object_id in rooms[destination].get("objects", []):
+                    if game_objects.get(object_id, {}).get("accosts", False):
+                        interceptor = object_id
+                        movement_accost_interceptors.add((source, destination))
+                        movement_accost_paths.add(
+                            resolve_bound_path(f"{object_id}.accosts", object_id)
+                        )
+                        break
+            if interceptor is not None:
+                movement_interceptors[(source, destination)] = interceptor
+
+    for npc_id in movement_interceptors.values():
+        if npc_id in npc_dialogue_graphs:
+            stateful_npc_dialogues[npc_id] = npc_dialogue_graphs[npc_id]
+            relevant_knots_by_npc[npc_id] = _collect_reachable_knots(
+                npc_dialogue_graphs[npc_id]
+            )
 
     # Construct STRIPS Planning Problem using unified-planning.
     # We now prune to only state variables that can actually affect reachability
@@ -300,6 +392,7 @@ def validate_quests(
                 continue
             for list_path, item_name, _ in list_list:
                 relevant_list_paths.add((resolve_bound_path(list_path, npc_id), item_name))
+    relevant_var_paths.update(movement_accost_paths)
 
     quest_set_candidates: dict[str, list[tuple[str, str]]] = {
         quest_id: [] for quest_id in quest_ids
@@ -321,12 +414,14 @@ def validate_quests(
     NPC = up.UserType("NPC")
 
     at_room = up.Fluent("at_room", l=Location)
+    pending_move = up.Fluent("pending_move", l=Location)
     at_knot = up.Fluent("at_knot", npc=NPC, k=Knot)
     in_explore = up.Fluent("in_explore")
     in_dialogue = up.Fluent("in_dialogue", npc=NPC)
     quest_completed: dict[str, Any] = {}
 
     problem.add_fluent(at_room, default_initial_value=False)
+    problem.add_fluent(pending_move, default_initial_value=False)
     problem.add_fluent(at_knot, default_initial_value=False)
     problem.add_fluent(in_explore, default_initial_value=True)
     problem.add_fluent(in_dialogue, default_initial_value=False)
@@ -340,6 +435,33 @@ def validate_quests(
             for quest_id, target_path in quest_targets.items():
                 if path == target_path and bool(value):
                     action.add_effect(quest_completed[quest_id], True)
+
+    def add_move_effects(
+        action: Any, mutations: list[tuple[str, str, str]], npc_id: str
+    ) -> None:
+        for target, _, destination in mutations:
+            if not move_targets_player(target, npc_id):
+                continue
+            if destination == PASS_MOVE_DESTINATION:
+                continue
+            destination_room = resolve_move_destination(destination, npc_id)
+            if destination_room is None:
+                continue
+            for room_name in room_objs.items():
+                action.add_effect(at_room(room_name), False)
+            action.add_effect(at_room(room_objs[destination_room]), True)
+
+    def add_pass_effects(action: Any, npc_id: str) -> None:
+        for (source, destination), interceptor in movement_interceptors.items():
+            if interceptor != npc_id:
+                continue
+            condition = pending_move(room_objs[destination])
+            for room_name in room_objs:
+                action.add_effect(
+                    at_room(room_name), False, condition=condition
+                )
+            action.add_effect(at_room(room_objs[destination]), True, condition=condition)
+            action.add_effect(pending_move(room_objs[destination]), False)
 
     # Collect all bound variables for reachable get & set actions only.
     all_bound_vars = relevant_var_paths
@@ -432,6 +554,15 @@ def validate_quests(
                 move_act = up.InstantaneousAction(f"move_{r_name}_to_{nxt}")
                 move_act.add_precondition(at_room(room_objs[r_name]))
                 move_act.add_precondition(in_explore)
+                interceptor = movement_interceptors.get((r_name, nxt))
+                if interceptor is not None:
+                    if (r_name, nxt) in movement_accost_interceptors:
+                        accost_path = resolve_bound_path(
+                            f"{interceptor}.accosts", interceptor
+                        )
+                        move_act.add_precondition(var_fluents_false[accost_path])
+                    else:
+                        continue
                 move_act.add_effect(at_room(room_objs[r_name]), False)
                 move_act.add_effect(at_room(room_objs[nxt]), True)
                 problem.add_action(move_act)
@@ -440,6 +571,7 @@ def validate_quests(
 
     # Add NPC and Dialogue objects & actions
     all_npc_knots: dict[str, list[str]] = {}
+    knot_objects_by_npc: dict[str, dict[str, Any]] = {}
     if profiler:
         action_timer = profiler.time_actions("Explore Context")
         action_timer.__enter__()
@@ -453,6 +585,7 @@ def validate_quests(
             k_obj = up.Object(f"{npc_id}_{knot_name}", Knot)
             problem.add_object(k_obj)
             knot_objs[knot_name] = k_obj
+        knot_objects_by_npc[npc_id] = knot_objs
 
         npc_room = ""
         try:
@@ -486,7 +619,11 @@ def validate_quests(
                 if key in has_fluents_true:
                     talk_act.add_effect(has_fluents_true[key], is_add)
                     talk_act.add_effect(has_fluents_false[key], not is_add)
+            add_move_effects(
+                talk_act, npc_move_mutations.get(npc_id, {}).get("__root__", []), npc_id
+            )
             problem.add_action(talk_act)
+
     if profiler:
         action_timer.__exit__(None, None, None)
 
@@ -503,6 +640,7 @@ def validate_quests(
         set_muts = npc_set_mutations.get(npc_id, {})
         has_conds = npc_has_conditions.get(npc_id, {})
         list_muts = npc_list_mutations.get(npc_id, {})
+        move_muts = npc_move_mutations.get(npc_id, {})
         for src_knot, targets in graph.items():
             if src_knot not in knot_objs:
                 continue
@@ -547,6 +685,12 @@ def validate_quests(
                             branch_act.add_effect(var_fluents_true[bound_k], val_bool)
                             branch_act.add_effect(var_fluents_false[bound_k], not val_bool)
                     add_completion_effects(branch_act, set_muts.get(tgt_knot, []))
+                    add_move_effects(branch_act, move_muts.get(tgt_knot, []), npc_id)
+                    if any(
+                        move[0] == "$player" and move[2] == PASS_MOVE_DESTINATION
+                        for move in move_muts.get(tgt_knot, [])
+                    ):
+                        add_pass_effects(branch_act, npc_id)
 
                     # Apply list mutations from target knot
                     for list_path, item_name, is_add in list_muts.get(tgt_knot, []):
@@ -568,6 +712,49 @@ def validate_quests(
             problem.add_action(end_act)
     if profiler:
         action_timer.__exit__(None, None, None)
+
+    for (source, destination), npc_id in movement_interceptors.items():
+        knot_objs = knot_objects_by_npc.get(npc_id)
+        if not knot_objs or "__root__" not in knot_objs:
+            continue
+        intercept_act = up.InstantaneousAction(
+            f"intercept_{source}_to_{destination}_{npc_id}"
+        )
+        intercept_act.add_precondition(at_room(room_objs[source]))
+        intercept_act.add_precondition(in_explore)
+        accost_path = resolve_bound_path(f"{npc_id}.accosts", npc_id)
+        if (source, destination) in movement_accost_interceptors:
+            intercept_act.add_precondition(var_fluents_true[accost_path])
+        intercept_act.add_effect(in_explore, False)
+        intercept_act.add_effect(in_dialogue(problem.object(npc_id)), True)
+        intercept_act.add_effect(
+            at_knot(problem.object(npc_id), knot_objs["__root__"]), True
+        )
+        for room_name, value in room_objs.items():
+            intercept_act.add_effect(pending_move(room_name), False)
+        intercept_act.add_effect(pending_move(room_objs[destination]), True)
+        for set_k, set_v in npc_set_mutations.get(npc_id, {}).get("__root__", []):
+            bound_k = resolve_bound_path(set_k, npc_id)
+            if bound_k in var_fluents_true:
+                val_bool = bool(set_v)
+                intercept_act.add_effect(var_fluents_true[bound_k], val_bool)
+                intercept_act.add_effect(var_fluents_false[bound_k], not val_bool)
+        add_completion_effects(
+            intercept_act, npc_set_mutations.get(npc_id, {}).get("__root__", [])
+        )
+        for list_path, item_name, is_add in npc_list_mutations.get(npc_id, {}).get(
+            "__root__", []
+        ):
+            bound_list = resolve_bound_path(list_path, npc_id)
+            key = (bound_list, item_name)
+            if key in has_fluents_true:
+                intercept_act.add_effect(has_fluents_true[key], is_add)
+                intercept_act.add_effect(has_fluents_false[key], not is_add)
+        add_move_effects(
+            intercept_act, npc_move_mutations.get(npc_id, {}).get("__root__", []), npc_id
+        )
+        add_pass_effects(intercept_act, npc_id)
+        problem.add_action(intercept_act)
 
     # Test only the completion goals declared by quest definitions. This avoids
     # restarting the planner for every dialogue knot.

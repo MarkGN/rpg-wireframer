@@ -16,6 +16,7 @@ By Mafia Law, I hereby name you the new Don.
 Serve oppressively and well.
 ~ add("$player.inventory", "earth_badge")
 ~ add("$player.inventory", "tm_27")
+~ set("quests.earth.completed", 1)
 -> END
 
 == lose

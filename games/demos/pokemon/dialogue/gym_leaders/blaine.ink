@@ -15,6 +15,7 @@ Hope you have burn heal!
 Alas, it was I who needed burn heal. Have a badge and a TM.
 ~ add("$player.inventory", "volcano_badge")
 ~ add("$player.inventory", "tm_38")
+~ set("quests.volcano.completed", 1)
 -> END
 
 == lose

@@ -3,7 +3,4 @@ description: Cerulean City to Rt. 25.
 exits: 
   Cerulean City: cerulean
   Rt. 25: route_25
-  Cave: cave
-objects:
-  - inherits: water
-    guards_exit: cave
+  Cave: {room: cave, blocker: water}

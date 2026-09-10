@@ -13,6 +13,7 @@ import yaml
 SCENARIO_FUNCTION = "scenario"
 INTERNAL_DIVERT_PREFIX = "."
 INTERNAL_TARGETS = {"done"}
+PASS_MOVE_DESTINATION = "__pass_target_room__"
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -457,6 +458,32 @@ def _find_set_mutations(node: Any, origin: str) -> list[tuple[str, Any]]:
     return results
 
 
+def _find_move_mutations(node: Any, origin: str) -> list[tuple[str, str, str]]:
+    results: list[tuple[str, str, str]] = []
+    if isinstance(node, list):
+        for i, element in enumerate(node):
+            if isinstance(element, dict):
+                function_name = element.get("x()")
+                if function_name == "move":
+                    args = _extract_string_args_before(node, i, 3)
+                    if args is not None:
+                        results.append((args[0], args[1], args[2]))
+                elif function_name == "pass":
+                    results.append(
+                        (
+                            "$player",
+                            "rooms.$current_room",
+                            PASS_MOVE_DESTINATION,
+                        )
+                    )
+            elif isinstance(element, (list, dict)):
+                results.extend(_find_move_mutations(element, origin))
+    elif isinstance(node, dict):
+        for val in node.values():
+            results.extend(_find_move_mutations(val, origin))
+    return results
+
+
 def _build_graph_from_story(
     story_data: dict[str, Any]
 ) -> tuple[
@@ -466,6 +493,7 @@ def _build_graph_from_story(
     dict[str, list[tuple[str, Any]]],
     dict[str, list[tuple[str, str, str, bool]]],
     dict[str, list[tuple[str, str, bool]]],
+    dict[str, list[tuple[str, str, str]]],
 ]:
     if "root" not in story_data or not isinstance(story_data["root"], list):
         raise ValueError("Compiled Ink JSON did not contain a valid root element")
@@ -481,12 +509,14 @@ def _build_graph_from_story(
     has_conditions: dict[str, list[tuple[str, str, str, bool]]] = {"__root__": []}
     set_mutations: dict[str, list[tuple[str, Any]]] = {"__root__": []}
     list_mutations: dict[str, list[tuple[str, str, bool]]] = {"__root__": []}
+    move_mutations: dict[str, list[tuple[str, str, str]]] = {"__root__": []}
     for knot in knots:
         graph[knot] = set()
         get_conditions[knot] = []
         has_conditions[knot] = []
         set_mutations[knot] = []
         list_mutations[knot] = []
+        move_mutations[knot] = []
 
     root_targets, root_scenarios = _find_divert_targets(root[0], "__root__")
     graph["__root__"].update(
@@ -513,6 +543,7 @@ def _build_graph_from_story(
             list_mutations[target] = []
     set_mutations["__root__"].extend(_find_set_mutations(root[0], "__root__"))
     list_mutations["__root__"].extend(_find_list_mutations(root[0], "__root__"))
+    move_mutations["__root__"].extend(_find_move_mutations(root[0], "__root__"))
 
     for knot_name, knot_body in knots_container.items():
         targets, scenario_calls = _find_divert_targets(knot_body, knot_name)
@@ -531,6 +562,7 @@ def _build_graph_from_story(
                 has_conditions[target] = []
                 set_mutations[target] = []
                 list_mutations[target] = []
+                move_mutations[target] = []
         for target, _, _, _ in knot_hass:
             if target.startswith("__content__"):
                 graph[knot_name].add(target)
@@ -539,10 +571,20 @@ def _build_graph_from_story(
                 has_conditions[target] = []
                 set_mutations[target] = []
                 list_mutations[target] = []
+                move_mutations[target] = []
         set_mutations[knot_name].extend(_find_set_mutations(knot_body, knot_name))
         list_mutations[knot_name].extend(_find_list_mutations(knot_body, knot_name))
+        move_mutations[knot_name].extend(_find_move_mutations(knot_body, knot_name))
 
-    return graph, root_scenarios, get_conditions, set_mutations, has_conditions, list_mutations
+    return (
+        graph,
+        root_scenarios,
+        get_conditions,
+        set_mutations,
+        has_conditions,
+        list_mutations,
+        move_mutations,
+    )
 
 
 def _collect_scenario_graph_edges(
@@ -608,6 +650,7 @@ def analyze_ink_file(
     dict[str, list[tuple[str, Any]]],
     dict[str, list[tuple[str, str, str, bool]]],
     dict[str, list[tuple[str, str, bool]]],
+    dict[str, list[tuple[str, str, str]]],
 ]:
     json_path = ink_json_path(ink_filename, dialogue_dir)
     with open(json_path, encoding="utf-8") as f:
@@ -620,6 +663,7 @@ def analyze_ink_file(
         set_mutations,
         has_conditions,
         list_mutations,
+        move_mutations,
     ) = _build_graph_from_story(story_data)
     if game_path is not None:
         ink_path = find_ink_path(ink_filename, dialogue_dir) or (dialogue_dir / ink_filename)
@@ -632,4 +676,5 @@ def analyze_ink_file(
         set_mutations,
         has_conditions,
         list_mutations,
+        move_mutations,
     )

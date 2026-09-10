@@ -129,6 +129,212 @@ class TestRoomReachabilityValidator:
 
         assert validate_quests(game_dir) == ["find_goal"]
 
+    def test_accost_blocks_entry_until_dialogue_changes_state(
+        self, tmp_path: Path
+    ) -> None:
+        """Test that entering an accosted room requires its dialogue first."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"exits": {"East": "gate"}}, "gate": {"exits": {}}},
+            quests_config={"pass_gate": {"name": "Pass Gate"}},
+        )
+        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir.joinpath("doorman.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Doorman",
+                    "location": "gate",
+                    "accosts": True,
+                    "ink": "doorman.ink",
+                }
+            ),
+            encoding="utf-8",
+        )
+        objects_dir.joinpath("reward.yaml").write_text(
+            yaml.dump(
+                {"name": "Reward", "location": "gate", "ink": "reward.ink"}
+            ),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL get(key)\nEXTERNAL set(key, value)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "doorman.ink").write_text(
+            '-> root\n=== root ===\n~ set("$self.accosts", 0)\n-> END\n',
+            encoding="utf-8",
+        )
+        (dialogue_dir / "reward.ink").write_text(
+            '-> root\n=== root ===\n{not get("doorman.accosts"): -> complete}\n'
+            "-> END\n=== complete ===\n"
+            '~ set("quests.pass_gate.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+
+    def test_move_external_bypasses_accosted_exit(self, tmp_path: Path) -> None:
+        """Test that an explicit player move can resolve an accoster in dialogue."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"exits": {"East": "gate"}}, "gate": {"exits": {}}},
+            quests_config={"pass_gate": {"name": "Pass Gate"}},
+        )
+        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir.joinpath("doorman.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Doorman",
+                    "location": "gate",
+                    "accosts": True,
+                    "ink": "doorman.ink",
+                }
+            ),
+            encoding="utf-8",
+        )
+        objects_dir.joinpath("reward.yaml").write_text(
+            yaml.dump({"name": "Reward", "location": "gate", "ink": "reward.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL get(key)\nEXTERNAL set(key, value)\n"
+            "EXTERNAL move(npc, source, destination)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "doorman.ink").write_text(
+            '-> root\n=== root ===\n'
+            '~ move("$player", "rooms.$current_room", "rooms.$npc_room")\n'
+            "-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "reward.ink").write_text(
+            '-> root\n=== root ===\n'
+            '-> complete\n'
+            "=== complete ===\n"
+            '~ set("quests.pass_gate.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+
+    def test_pass_external_bypasses_accosted_exit(self, tmp_path: Path) -> None:
+        """Test that pass() is equivalent to the standard player move."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"exits": {"East": "gate"}}, "gate": {"exits": {}}},
+            quests_config={"pass_gate": {"name": "Pass Gate"}},
+        )
+        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir.joinpath("doorman.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Doorman",
+                    "location": "gate",
+                    "accosts": True,
+                    "ink": "doorman.ink",
+                }
+            ),
+            encoding="utf-8",
+        )
+        objects_dir.joinpath("reward.yaml").write_text(
+            yaml.dump({"name": "Reward", "location": "gate", "ink": "reward.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL set(key, value)\nEXTERNAL pass()\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "doorman.ink").write_text(
+            "-> root\n=== root ===\n~ pass()\n-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "reward.ink").write_text(
+            "-> root\n=== root ===\n-> complete\n"
+            "=== complete ===\n"
+            '~ set("quests.pass_gate.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+
+    def test_pass_external_bypasses_guarded_exit(self, tmp_path: Path) -> None:
+        """Test that pass() uses the blocked exit's destination, not the guard's room."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {
+                    "exits": {
+                        "East": {"room": "destination", "blocker": "guard"}
+                    }
+                },
+                "destination": {"exits": {}},
+            },
+            quests_config={"reach_destination": {"name": "Reach Destination"}},
+        )
+        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir.joinpath("guard.yaml").write_text(
+            yaml.dump({"name": "Guard", "location": "start", "ink": "guard.ink"}),
+            encoding="utf-8",
+        )
+        objects_dir.joinpath("reward.yaml").write_text(
+            yaml.dump(
+                {"name": "Reward", "location": "destination", "ink": "reward.ink"}
+            ),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL has(target, item)\nEXTERNAL set(key, value)\n"
+            "EXTERNAL pass()\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "guard.ink").write_text(
+            "-> root\n=== root ===\n"
+            '{has("$player.inventory", "badge"): -> passing}\n'
+            "-> END\n"
+            "=== passing ===\n"
+            "~ pass()\n-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "reward.ink").write_text(
+            "-> root\n=== root ===\n-> complete\n"
+            "=== complete ===\n"
+            '~ set("quests.reach_destination.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "rooms" / "start.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Start",
+                    "exits": {
+                        "East": {"room": "destination", "blocker": "guard"}
+                    },
+                    "objects": ["hero", "guard"],
+                    "items": ["badge"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "rooms" / "destination.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Destination",
+                    "exits": {},
+                    "objects": ["reward"],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+
     # Temporarily disabled for dialogue reachability milestone
     # def test_quest_goal_room_unreachable(self, tmp_path: Path) -> None:
     #     """Test detection of an unreachable goal_room quest."""
