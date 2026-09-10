@@ -5,4 +5,4 @@ exits:
   Rt. 12 South: route_12_south
   Rt. 12 North: route_12
 objects:
-  - snorlax
+  - inherits: snorlax

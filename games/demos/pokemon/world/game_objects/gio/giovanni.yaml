@@ -1,0 +1,4 @@
+inherits: trainer
+name: Giovanni
+description: Italian with close-cropped hair. Always wears an expensive suit.
+abstract: true

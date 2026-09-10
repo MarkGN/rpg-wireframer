@@ -393,6 +393,32 @@ def _find_dialogue_conditions(
                                                             not neg,
                                                         )
                                                     )
+                                    if is_conditional:
+                                        fallthrough_target = None
+                                        for following in node[ev_idx + 1 :]:
+                                            if (
+                                                isinstance(following, dict)
+                                                and "->" in following
+                                                and isinstance(following["->"], str)
+                                                and not _is_internal_target(following["->"], set())
+                                                and following["->"] not in INTERNAL_TARGETS
+                                            ):
+                                                fallthrough_target = following["->"]
+                                                break
+                                        if fallthrough_target is not None:
+                                            for var_path, neg in block_gets:
+                                                get_results.append(
+                                                    (fallthrough_target, var_path, not neg)
+                                                )
+                                            for list_path, item_name, neg in block_hass:
+                                                has_results.append(
+                                                    (
+                                                        fallthrough_target,
+                                                        list_path,
+                                                        item_name,
+                                                        not neg,
+                                                    )
+                                                )
                                     continue
                             if elt in ("nop", "done"):
                                 break

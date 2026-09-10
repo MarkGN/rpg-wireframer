@@ -2,3 +2,5 @@ name: Rocket hideout
 description: An evil lair, naturally in the casino's basement.
 exits: 
   Game centre: game_centre
+objects:
+  - giovanni_celadon

@@ -709,6 +709,8 @@ def validate_quests(
             end_act.add_effect(in_dialogue(npc_obj), False)
             end_act.add_effect(at_knot(npc_obj, knot_objs[src_knot]), False)
             end_act.add_effect(in_explore, True)
+            for room in room_objs.values():
+                end_act.add_effect(pending_move(room), False)
             problem.add_action(end_act)
     if profiler:
         action_timer.__exit__(None, None, None)
@@ -753,7 +755,6 @@ def validate_quests(
         add_move_effects(
             intercept_act, npc_move_mutations.get(npc_id, {}).get("__root__", []), npc_id
         )
-        add_pass_effects(intercept_act, npc_id)
         problem.add_action(intercept_act)
 
     # Test only the completion goals declared by quest definitions. This avoids
@@ -769,6 +770,23 @@ def validate_quests(
             if not fluent.signature and problem.initial_value(fluent()).is_true():
                 state_example.append(str(fluent))
         state_example.append(f"at_room({start_room})")
+
+    def save_satisficing_plan(
+        quest_id: str, result: Any, planner_name: str
+    ) -> None:
+        if result.status.name != "SOLVED_SATISFICING" or result.plan is None:
+            return
+        artefacts_dir = game_path / "artefacts"
+        artefacts_dir.mkdir(parents=True, exist_ok=True)
+        plan_path = artefacts_dir / f"{quest_id}.txt"
+        plan_path.write_text(
+            f"Quest: {quest_id}\n"
+            f"Planner: {planner_name}\n"
+            f"Status: {result.status.name}\n\n"
+            f"{result.plan}\n",
+            encoding="utf-8",
+        )
+
     if profiler:
         checked_quests: set[str] = set()
         with up.OneshotPlanner(
@@ -810,6 +828,7 @@ def validate_quests(
                         "status": res.status.name,
                     }
                 )
+                save_satisficing_plan(quest_id, res, planner.name)
                 if res.status.name not in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
                     incomplete_quests.append(quest_id)
                 if profiler.expired():
@@ -832,6 +851,7 @@ def validate_quests(
                 problem.clear_goals()
                 problem.add_goal(quest_completed[quest_id])
                 res = planner.solve(problem)
+                save_satisficing_plan(quest_id, res, planner.name)
                 if res.status.name not in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
                     incomplete_quests.append(quest_id)
 

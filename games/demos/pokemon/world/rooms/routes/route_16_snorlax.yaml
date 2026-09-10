@@ -1,0 +1,7 @@
+name: Route 16 Snorlax
+description: Rt. 16 to Celadon City.
+exits: 
+  Rt. 16 East: route_16_east
+  Rt. 16 West: route_16_west
+objects:
+  - inherits: snorlax

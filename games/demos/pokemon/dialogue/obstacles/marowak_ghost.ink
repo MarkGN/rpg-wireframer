@@ -18,7 +18,7 @@ You make out the ghost of Marowak.
 == win
 ~ set("$self.accosts", 0)
 ~ set("$self.visible", 0)
-~ move("$player", "rooms.$current_room", "rooms.$npc_room")
+~ pass()
 -> END
 
 == lose

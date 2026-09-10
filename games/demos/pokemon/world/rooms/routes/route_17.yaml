@@ -1,5 +1,5 @@
 name: Route 17
 description: Rt. 16 to Rt. 18
 exits: 
-  Rt. 16: route_16
+  Rt. 16: route_16_west
   Rt. 18: route_18

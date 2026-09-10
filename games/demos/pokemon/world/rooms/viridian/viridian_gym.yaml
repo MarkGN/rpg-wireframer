@@ -3,4 +3,4 @@ description: A gym.
 exits: 
   Town: viridian
 objects:
-  - giovanni
+  - giovanni_gym

@@ -3,3 +3,5 @@ description: Fuschia City to Seafoam Islands.
 exits: 
   Fuschia City: fuschia
   Seafoam Islands: seafoam
+objects:
+  - water

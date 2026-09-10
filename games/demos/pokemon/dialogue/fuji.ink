@@ -6,7 +6,7 @@ Oh hey, you rescued me. Neat.
 It's what I do.
 ~ speaker("$self")
 Here, have a Pokeflute as thanks.
-~ add("$player.inventory", "poke_flute")
+~ add("$player.inventory", "pokeflute")
 ~ set("$self.given", 1)
 -> END
 

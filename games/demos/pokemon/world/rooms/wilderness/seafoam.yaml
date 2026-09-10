@@ -3,3 +3,5 @@ description: Cold and wet.
 exits: 
   Rt. 19: route_19
   Rt. 20: route_20
+objects:
+  - water

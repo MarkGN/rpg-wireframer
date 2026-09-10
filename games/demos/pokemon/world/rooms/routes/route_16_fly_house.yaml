@@ -1,7 +1,7 @@
 name: Fly house
 description: A neat little house.
 exits: 
-  Rt. 16: route_16
+  Rt. 16: route_16_east
 objects:
   - tree:
     inherits: cut_tree

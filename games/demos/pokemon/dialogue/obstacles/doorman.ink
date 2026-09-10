@@ -65,8 +65,7 @@ Seven badges. You still need the EarthBadge from Viridian City. Bring your A-gam
   Well done, sir.
   And good luck.
   ~ set("$self.passed", true)
-  ~ set("$self.accosts", true)
-  ~ set("quests.champion.completed", 1)
+  ~ set("$self.accosts", false)
   ~ pass()
 }
 -> END

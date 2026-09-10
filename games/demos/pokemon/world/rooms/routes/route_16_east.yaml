@@ -1,0 +1,6 @@
+name: Route 16
+description: Rt. 16 to Celadon City.
+exits: 
+  Fly house: {room: route_16_fly_house, blocker: cut_tree}
+  Rt. 16 West: route_16_snorlax
+  Celadon City: celadon

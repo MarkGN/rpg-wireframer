@@ -104,6 +104,12 @@ class TestRoomReachabilityValidator:
         )
 
         assert validate_quests(game_dir) == []
+        plan_report = (game_dir / "artefacts" / "find_goal.txt").read_text(
+            encoding="utf-8"
+        )
+        assert "Quest: find_goal" in plan_report
+        assert "Status: SOLVED_SATISFICING" in plan_report
+        assert "talk_alice" in plan_report
 
     def test_quest_completion_set_unreachable(self, tmp_path: Path) -> None:
         """Test that a completion mutation behind an impossible guard fails."""
@@ -128,6 +134,66 @@ class TestRoomReachabilityValidator:
         )
 
         assert validate_quests(game_dir) == ["find_goal"]
+
+    def test_fallthrough_branch_requires_all_previous_conditions(
+        self, tmp_path: Path
+    ) -> None:
+        """Test that a sequence of guarded diverts constrains its final fallthrough."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"exits": {}}},
+            quests_config={"finish": {"name": "Finish"}},
+        )
+        (game_dir / "world" / "game_objects" / "guard.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Guard",
+                    "location": "start",
+                    "ink": "guard.ink",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Player",
+                    "location": "start",
+                    "inventory": ["first"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL has(target, item)\nEXTERNAL set(key, value)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "guard.ink").write_text(
+            "-> root\n=== root ===\n"
+            '{not has("$player.inventory", "first"): -> missing_first}\n'
+            '{not has("$player.inventory", "second"): -> missing_second}\n'
+            "-> finish\n"
+            "=== missing_first ===\n-> END\n"
+            "=== missing_second ===\n-> END\n"
+            "=== finish ===\n"
+            '~ set("quests.finish.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == ["finish"]
+        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Player",
+                    "location": "start",
+                    "inventory": ["first", "second"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert validate_quests(game_dir) == []
 
     def test_accost_blocks_entry_until_dialogue_changes_state(
         self, tmp_path: Path
@@ -334,6 +400,59 @@ class TestRoomReachabilityValidator:
         )
 
         assert validate_quests(game_dir) == []
+
+    def test_accoster_pass_requires_dialogue_condition(self, tmp_path: Path) -> None:
+        """Test that an accoster cannot be bypassed without satisfying its dialogue."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {"exits": {"East": "water"}},
+                "water": {"exits": {}},
+            },
+            quests_config={"cross_water": {"name": "Cross Water"}},
+        )
+        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+            yaml.dump({"name": "Player", "location": "start", "inventory": ["surf"]}),
+            encoding="utf-8",
+        )
+        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir.joinpath("obstacle.yaml").write_text(
+            yaml.dump(
+                {"name": "Water", "location": "water", "accosts": True, "ink": "obstacle.ink"}
+            ),
+            encoding="utf-8",
+        )
+        objects_dir.joinpath("reward.yaml").write_text(
+            yaml.dump({"name": "Reward", "location": "water", "ink": "reward.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL has(target, item)\nEXTERNAL set(key, value)\n"
+            "EXTERNAL pass()\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "obstacle.ink").write_text(
+            "-> root\n=== root ===\n"
+            '{has("$player.inventory", "surf"): -> surf}\n'
+            "-> END\n"
+            "=== surf ===\n~ pass()\n-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "reward.ink").write_text(
+            "-> root\n=== root ===\n-> complete\n"
+            "=== complete ===\n"
+            '~ set("quests.cross_water.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+            yaml.dump({"name": "Player", "location": "start", "inventory": []}),
+            encoding="utf-8",
+        )
+        assert validate_quests(game_dir) == ["cross_water"]
 
     # Temporarily disabled for dialogue reachability milestone
     # def test_quest_goal_room_unreachable(self, tmp_path: Path) -> None:
