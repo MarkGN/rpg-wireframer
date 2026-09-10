@@ -16,7 +16,8 @@ You make out the ghost of Marowak.
 -> END
 
 == win
-~ remove("$npc_room.objects", "$self")
+~ set("$self.accosts", 0)
+~ set("$self.visible", 0)
 ~ move("$player", "rooms.$current_room", "rooms.$npc_room")
 -> END
 

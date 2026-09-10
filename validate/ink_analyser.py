@@ -232,68 +232,200 @@ def _parse_scenario_outcomes(raw: Any, scenario_path: Path) -> dict[str, str]:
     return outcomes
 
 
-def _extract_target_from_branch(branch_dict: Any) -> str | None:
-    if isinstance(branch_dict, dict) and "b" in branch_dict:
-        b_list = branch_dict["b"]
-        if isinstance(b_list, list):
-            for item in b_list:
-                if isinstance(item, dict) and "->" in item:
-                    tgt = item["->"]
-                    if isinstance(tgt, str) and not _is_internal_target(tgt, set()):
-                        return tgt
-                elif isinstance(item, (dict, list)):
-                    sub_tgt = _extract_target_from_branch(item)
-                    if sub_tgt:
-                        return sub_tgt
-    elif isinstance(branch_dict, list):
-        for sub_item in branch_dict:
-            sub_tgt = _extract_target_from_branch(sub_item)
-            if sub_tgt:
-                return sub_tgt
+def _extract_string_args_before(node: list[Any], index: int, count: int) -> list[str] | None:
+    args: list[str] = []
+    j = index - 1
+    while j >= 0 and len(args) < count:
+        if node[j] == "/str":
+            if (
+                j - 2 >= 0
+                and node[j - 2] == "str"
+                and isinstance(node[j - 1], str)
+                and node[j - 1].startswith("^")
+            ):
+                args.append(node[j - 1][1:])
+                j -= 3
+                continue
+        elif isinstance(node[j], str) and node[j].startswith("^"):
+            args.append(node[j][1:])
+            j -= 1
+            continue
+        elif isinstance(node[j], (int, float, bool)):
+            args.append(str(node[j]))
+            j -= 1
+            continue
+        j -= 1
+    if len(args) == count:
+        args.reverse()
+        return args
     return None
 
 
+def _extract_targets_from_branch(node: Any) -> set[str]:
+    targets: set[str] = set()
+    if isinstance(node, dict):
+        if "->" in node:
+            tgt = node["->"]
+            if (
+                isinstance(tgt, str)
+                and not _is_internal_target(tgt, set())
+                and tgt not in INTERNAL_TARGETS
+                and tgt not in ("end", "done")
+            ):
+                targets.add(tgt)
+        for val in node.values():
+            targets.update(_extract_targets_from_branch(val))
+    elif isinstance(node, list):
+        for item in node:
+            targets.update(_extract_targets_from_branch(item))
+    return targets
+
+
+def _extract_target_from_branch(branch_dict: Any) -> str | None:
+    targets = _extract_targets_from_branch(branch_dict)
+    if targets:
+        return next(iter(targets))
+    return None
+
+
+def _find_dialogue_conditions(
+    node: Any, origin: str
+) -> tuple[list[tuple[str, str, bool]], list[tuple[str, str, str, bool]]]:
+    get_results: list[tuple[str, str, bool]] = []
+    has_results: list[tuple[str, str, str, bool]] = []
+    if isinstance(node, list):
+        for i, element in enumerate(node):
+            if element == "ev":
+                ev_idx = None
+                for k in range(i + 1, len(node)):
+                    if node[k] == "/ev":
+                        ev_idx = k
+                        break
+                if ev_idx is not None:
+                    block_gets: list[tuple[str, bool]] = []
+                    block_hass: list[tuple[str, str, bool]] = []
+                    for k in range(i + 1, ev_idx):
+                        item = node[k]
+                        if isinstance(item, dict):
+                            fn = item.get("x()")
+                            if fn == "get":
+                                args = _extract_string_args_before(node, k, 1)
+                                if args:
+                                    negated = (k + 1 < ev_idx and node[k + 1] == "!")
+                                    block_gets.append((args[0], negated))
+                            elif fn == "has":
+                                args = _extract_string_args_before(node, k, 2)
+                                if args:
+                                    negated = (k + 1 < ev_idx and node[k + 1] == "!")
+                                    block_hass.append((args[0], args[1], negated))
+
+                    total_conds = len(block_gets) + len(block_hass)
+                    if total_conds > 0:
+                        for k in range(ev_idx + 1, len(node)):
+                            elt = node[k]
+                            if isinstance(elt, list) and len(elt) >= 2:
+                                first_item = elt[0]
+                                second_item = elt[1]
+                                if (
+                                    isinstance(first_item, dict)
+                                    and first_item.get("->") == ".^.b"
+                                ):
+                                    is_conditional = first_item.get("c") is True
+                                    target_knots = _extract_targets_from_branch(second_item)
+                                    for target_knot in target_knots:
+                                        if is_conditional:
+                                            for var_path, neg in block_gets:
+                                                get_results.append((target_knot, var_path, neg))
+                                            for list_path, item_name, neg in block_hass:
+                                                has_results.append((target_knot, list_path, item_name, neg))
+                                        elif total_conds == 1:
+                                            for var_path, neg in block_gets:
+                                                get_results.append((target_knot, var_path, not neg))
+                                            for list_path, item_name, neg in block_hass:
+                                                has_results.append((target_knot, list_path, item_name, not neg))
+                                    if is_conditional and not target_knots:
+                                        fallthrough_target = None
+                                        for following in node[k + 1 :]:
+                                            if isinstance(following, dict) and "->" in following:
+                                                candidate = following["->"]
+                                                if (
+                                                    isinstance(candidate, str)
+                                                    and not _is_internal_target(candidate, set())
+                                                    and candidate not in INTERNAL_TARGETS
+                                                ):
+                                                    fallthrough_target = candidate
+                                                    break
+                                        if fallthrough_target is not None:
+                                            for var_path, neg in block_gets:
+                                                get_results.append(
+                                                    (fallthrough_target, var_path, not neg)
+                                                )
+                                            for list_path, item_name, neg in block_hass:
+                                                has_results.append(
+                                                    (
+                                                        fallthrough_target,
+                                                        list_path,
+                                                        item_name,
+                                                        not neg,
+                                                    )
+                                                )
+                                        else:
+                                            has_content = any(
+                                                isinstance(following, str)
+                                                and following.startswith("^")
+                                                for following in node[ev_idx + 1 :]
+                                            )
+                                            if has_content:
+                                                content_target = (
+                                                    f"__content__{origin}_{len(get_results) + len(has_results)}"
+                                                )
+                                                for var_path, neg in block_gets:
+                                                    get_results.append(
+                                                        (content_target, var_path, not neg)
+                                                    )
+                                                for list_path, item_name, neg in block_hass:
+                                                    has_results.append(
+                                                        (
+                                                            content_target,
+                                                            list_path,
+                                                            item_name,
+                                                            not neg,
+                                                        )
+                                                    )
+                                    continue
+                            if elt in ("nop", "done"):
+                                break
+            if isinstance(element, (list, dict)):
+                g, h = _find_dialogue_conditions(element, origin)
+                get_results.extend(g)
+                has_results.extend(h)
+    elif isinstance(node, dict):
+        for val in node.values():
+            g, h = _find_dialogue_conditions(val, origin)
+            get_results.extend(g)
+            has_results.extend(h)
+    return get_results, has_results
+
+
 def _find_get_conditions(node: Any, origin: str) -> list[tuple[str, str, bool]]:
+    get_res, _ = _find_dialogue_conditions(node, origin)
+    return get_res
+
+
+def _find_list_mutations(node: Any, origin: str) -> list[tuple[str, str, bool]]:
     results: list[tuple[str, str, bool]] = []
     if isinstance(node, list):
         for i, element in enumerate(node):
-            if isinstance(element, dict) and element.get("x()") == "get":
-                var_path = None
-                for j in range(i - 1, -1, -1):
-                    prev = node[j]
-                    if isinstance(prev, str) and prev.startswith("^"):
-                        var_path = prev[1:]
-                        break
-                if var_path:
-                    negated = False
-                    ev_idx = i + 1
-                    for k in range(i + 1, len(node)):
-                        if node[k] == "!":
-                            negated = True
-                        elif node[k] == "/ev":
-                            ev_idx = k
-                            break
-                    for k in range(ev_idx + 1, len(node)):
-                        elt = node[k]
-                        if isinstance(elt, list) and len(elt) >= 2:
-                            first_item = elt[0]
-                            second_item = elt[1]
-                            if isinstance(first_item, dict) and first_item.get("->") == ".^.b":
-                                is_conditional = first_item.get("c") is True
-                                target_knot = _extract_target_from_branch(second_item)
-                                if target_knot:
-                                    if is_conditional:
-                                        results.append((target_knot, var_path, negated))
-                                    else:
-                                        results.append((target_knot, var_path, not negated))
-                                continue
-                        if elt in ("nop", "done"):
-                            break
-
-            results.extend(_find_get_conditions(element, origin))
+            if isinstance(element, dict) and element.get("x()") in ("add", "remove"):
+                is_add = element.get("x()") == "add"
+                args = _extract_string_args_before(node, i, 2)
+                if args is not None:
+                    results.append((args[0], args[1], is_add))
+            elif isinstance(element, (list, dict)):
+                results.extend(_find_list_mutations(element, origin))
     elif isinstance(node, dict):
         for val in node.values():
-            results.extend(_find_get_conditions(val, origin))
+            results.extend(_find_list_mutations(val, origin))
     return results
 
 
@@ -327,7 +459,14 @@ def _find_set_mutations(node: Any, origin: str) -> list[tuple[str, Any]]:
 
 def _build_graph_from_story(
     story_data: dict[str, Any]
-) -> tuple[dict[str, set[str]], list[tuple[str, str]], dict[str, list[tuple[str, str, bool]]], dict[str, list[tuple[str, Any]]]]:
+) -> tuple[
+    dict[str, set[str]],
+    list[tuple[str, str]],
+    dict[str, list[tuple[str, str, bool]]],
+    dict[str, list[tuple[str, Any]]],
+    dict[str, list[tuple[str, str, str, bool]]],
+    dict[str, list[tuple[str, str, bool]]],
+]:
     if "root" not in story_data or not isinstance(story_data["root"], list):
         raise ValueError("Compiled Ink JSON did not contain a valid root element")
 
@@ -339,18 +478,41 @@ def _build_graph_from_story(
     knots = set(knots_container.keys())
     graph: dict[str, set[str]] = {"__root__": set()}
     get_conditions: dict[str, list[tuple[str, str, bool]]] = {"__root__": []}
+    has_conditions: dict[str, list[tuple[str, str, str, bool]]] = {"__root__": []}
     set_mutations: dict[str, list[tuple[str, Any]]] = {"__root__": []}
+    list_mutations: dict[str, list[tuple[str, str, bool]]] = {"__root__": []}
     for knot in knots:
         graph[knot] = set()
         get_conditions[knot] = []
+        has_conditions[knot] = []
         set_mutations[knot] = []
+        list_mutations[knot] = []
 
     root_targets, root_scenarios = _find_divert_targets(root[0], "__root__")
     graph["__root__"].update(
         t for t in root_targets if t in knots or t in INTERNAL_TARGETS
     )
-    get_conditions["__root__"].extend(_find_get_conditions(root[0], "__root__"))
+    root_gets, root_hass = _find_dialogue_conditions(root[0], "__root__")
+    get_conditions["__root__"].extend(root_gets)
+    has_conditions["__root__"].extend(root_hass)
+    for target, _, _ in root_gets:
+        if target.startswith("__content__"):
+            graph["__root__"].add(target)
+            graph[target] = set()
+            get_conditions[target] = []
+            has_conditions[target] = []
+            set_mutations[target] = []
+            list_mutations[target] = []
+    for target, _, _, _ in root_hass:
+        if target.startswith("__content__"):
+            graph["__root__"].add(target)
+            graph[target] = set()
+            get_conditions[target] = []
+            has_conditions[target] = []
+            set_mutations[target] = []
+            list_mutations[target] = []
     set_mutations["__root__"].extend(_find_set_mutations(root[0], "__root__"))
+    list_mutations["__root__"].extend(_find_list_mutations(root[0], "__root__"))
 
     for knot_name, knot_body in knots_container.items():
         targets, scenario_calls = _find_divert_targets(knot_body, knot_name)
@@ -358,10 +520,29 @@ def _build_graph_from_story(
             t for t in targets if t in knots or t in INTERNAL_TARGETS
         )
         root_scenarios.extend(scenario_calls)
-        get_conditions[knot_name].extend(_find_get_conditions(knot_body, knot_name))
+        knot_gets, knot_hass = _find_dialogue_conditions(knot_body, knot_name)
+        get_conditions[knot_name].extend(knot_gets)
+        has_conditions[knot_name].extend(knot_hass)
+        for target, _, _ in knot_gets:
+            if target.startswith("__content__"):
+                graph[knot_name].add(target)
+                graph[target] = set()
+                get_conditions[target] = []
+                has_conditions[target] = []
+                set_mutations[target] = []
+                list_mutations[target] = []
+        for target, _, _, _ in knot_hass:
+            if target.startswith("__content__"):
+                graph[knot_name].add(target)
+                graph[target] = set()
+                get_conditions[target] = []
+                has_conditions[target] = []
+                set_mutations[target] = []
+                list_mutations[target] = []
         set_mutations[knot_name].extend(_find_set_mutations(knot_body, knot_name))
+        list_mutations[knot_name].extend(_find_list_mutations(knot_body, knot_name))
 
-    return graph, root_scenarios, get_conditions, set_mutations
+    return graph, root_scenarios, get_conditions, set_mutations, has_conditions, list_mutations
 
 
 def _collect_scenario_graph_edges(
@@ -420,14 +601,35 @@ def _collect_reachable_knots(graph: dict[str, set[str]]) -> set[str]:
 
 def analyze_ink_file(
     ink_filename: str, dialogue_dir: Path, game_path: Path | None = None
-) -> tuple[dict[str, set[str]], list[tuple[str, str]], dict[str, list[tuple[str, str, bool]]], dict[str, list[tuple[str, Any]]]]:
+) -> tuple[
+    dict[str, set[str]],
+    list[tuple[str, str]],
+    dict[str, list[tuple[str, str, bool]]],
+    dict[str, list[tuple[str, Any]]],
+    dict[str, list[tuple[str, str, str, bool]]],
+    dict[str, list[tuple[str, str, bool]]],
+]:
     json_path = ink_json_path(ink_filename, dialogue_dir)
     with open(json_path, encoding="utf-8") as f:
         story_data = json.load(f)
 
-    graph, scenario_calls, get_conditions, set_mutations = _build_graph_from_story(story_data)
+    (
+        graph,
+        scenario_calls,
+        get_conditions,
+        set_mutations,
+        has_conditions,
+        list_mutations,
+    ) = _build_graph_from_story(story_data)
     if game_path is not None:
         ink_path = find_ink_path(ink_filename, dialogue_dir) or (dialogue_dir / ink_filename)
         _collect_scenario_graph_edges(graph, scenario_calls, game_path, ink_path)
 
-    return graph, scenario_calls, get_conditions, set_mutations
+    return (
+        graph,
+        scenario_calls,
+        get_conditions,
+        set_mutations,
+        has_conditions,
+        list_mutations,
+    )

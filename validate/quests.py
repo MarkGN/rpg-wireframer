@@ -1,17 +1,150 @@
 from __future__ import annotations
 
+import signal
+from contextlib import contextmanager
 from pathlib import Path
 from sys import argv
+from time import monotonic
 from typing import Any
 
 import unified_planning.shortcuts as up
 
 up.get_environment().credits_stream = None
+try:
+    import up_fast_downward
+except ImportError:
+    up_fast_downward = None
 import yaml
 
 from runners import world
 from runners.binder import Binder
-from validate.ink_analyser import analyze_ink_file, find_ink_path
+from validate.ink_analyser import (
+    _collect_reachable_knots,
+    analyze_ink_file,
+    find_ink_path,
+)
+
+
+class _Profile:
+    def __init__(self, limit_seconds: float = 60.0):
+        self.started = monotonic()
+        self.deadline = self.started + limit_seconds
+        self.limit_seconds = limit_seconds
+        self.action_seconds = {"Explore Context": 0.0, "Dialogue": 0.0}
+        self.solver_calls = 0
+        self.solver_seconds = 0.0
+        self.stopped = False
+        self.stop_reason = ""
+        self.planner_name = ""
+        self.solver_records: list[dict[str, Any]] = []
+
+    def expired(self) -> bool:
+        if monotonic() >= self.deadline:
+            self.stopped = True
+            self.stop_reason = "five-minute profiling limit reached"
+            return True
+        return False
+
+    def remaining(self) -> float:
+        return max(0.0, self.deadline - monotonic())
+
+    @contextmanager
+    def time_actions(self, context: str):
+        started = monotonic()
+        try:
+            yield
+        finally:
+            self.action_seconds[context] += monotonic() - started
+
+    def report(self, problem: Any | None = None, state_example: list[str] | None = None):
+        elapsed = monotonic() - self.started
+        total_action_seconds = sum(self.action_seconds.values())
+        print("\nQuest validator profile")
+        print(f"Elapsed: {elapsed:.2f}s")
+        if self.stopped:
+            print(f"Stopped: {self.stop_reason}")
+        print(f"Solver calls: {self.solver_calls}")
+        if self.planner_name:
+            print(f"Planner: {self.planner_name}")
+        print(f"Solver time: {self.solver_seconds:.2f}s")
+        slow_records = [
+            record for record in self.solver_records if record["seconds"] >= 10.0
+        ]
+        if slow_records:
+            print("Solver calls taking at least 10s:")
+            for record in sorted(
+                slow_records, key=lambda item: item["seconds"], reverse=True
+            ):
+                print(
+                    f"  {record['goal']}: {record['seconds']:.2f}s "
+                    f"({record['status']})"
+                )
+        if self.solver_records:
+            print("Slowest solver calls:")
+            for record in sorted(
+                self.solver_records,
+                key=lambda item: item["seconds"],
+                reverse=True,
+            )[:10]:
+                print(
+                    f"  {record['goal']}: {record['seconds']:.2f}s "
+                    f"({record['status']})"
+                )
+        for context, seconds in self.action_seconds.items():
+            fraction = seconds / total_action_seconds if total_action_seconds else 0.0
+            print(f"{context} action expansion: {seconds:.4f}s ({fraction:.1%})")
+        if problem is not None:
+            fluents = list(problem.fluents)
+            actions = list(problem.actions)
+            objects = list(problem.all_objects)
+            print(
+                "State/model size: "
+                f"{len(fluents)} fluents, {len(actions)} actions, {len(objects)} objects"
+            )
+            boolean_fluents = [
+                fluent for fluent in fluents if not fluent.signature
+            ]
+            state_count = (
+                f"{2 ** len(boolean_fluents):,}"
+                if len(boolean_fluents) < 1000
+                else "too large to materialize"
+            )
+            print(
+                "Estimated boolean state space: "
+                f"2^{len(boolean_fluents)} ({state_count} states)"
+            )
+            print("Example actions:")
+            for action in actions[:10]:
+                print(f"  {action.name}")
+        if state_example:
+            print("Example initial state:")
+            for fact in state_example[:30]:
+                print(f"  {fact}")
+
+
+@contextmanager
+def _hard_timeout(seconds: float):
+    """Interrupt a profiled in-process planner on Unix when it exceeds its budget."""
+    if seconds <= 0:
+        raise TimeoutError
+
+    def interrupt(_signum: int, _frame: Any) -> None:
+        raise TimeoutError("planner solve timed out")
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, interrupt)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+
+
+def _planner_names() -> list[str] | None:
+    if up_fast_downward is not None:
+        return ["fast-downward"]
+    return None
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -43,8 +176,20 @@ def _evaluate_initial_state(bound_path: str, w: world.World) -> bool:
         return False
 
 
-def validate_quests(game_path: Path | str) -> list[str]:
-    """Validate dialogue knot reachability with dynamic persistent state (evaluating get() and set())."""
+def _evaluate_has_initial_state(bound_list: str, item: str, w: world.World) -> bool:
+    try:
+        val = w.get_state(bound_list)
+        if isinstance(val, (list, tuple, set)):
+            return item in val
+        return False
+    except (KeyError, IndexError, TypeError):
+        return False
+
+
+def validate_quests(
+    game_path: Path | str, *, profile: bool = False
+) -> list[str]:
+    """Validate that every declared quest can reach a truthy completion mutation."""
     game_path = Path(game_path)
     w = world.World(game_path)
     rooms = w.world_state["rooms"]
@@ -52,11 +197,26 @@ def validate_quests(game_path: Path | str) -> list[str]:
     player_handle = w.player_handle
     start_room = w.current_room
     dialogue_dir = game_path / "dialogue"
+    quest_ids = sorted(w.world_state.get("quests", {}))
+    quest_targets = {
+        quest_id: f"quests.{quest_id}.completed" for quest_id in quest_ids
+    }
+    profiler = _Profile() if profile else None
+
+    def resolve_bound_path(var_path: str, npc_id: str) -> str:
+        key = (var_path, npc_id)
+        if key not in bound_cache:
+            bound_cache[key] = _bind_var_path(var_path, npc_id, w)
+        return bound_cache[key]
+
+    bound_cache: dict[tuple[str, str], str] = {}
 
     # Map NPC dialogues
     npc_dialogue_graphs: dict[str, dict[str, set[str]]] = {}
     npc_get_conditions: dict[str, dict[str, list[tuple[str, str, bool]]]] = {}
     npc_set_mutations: dict[str, dict[str, list[tuple[str, Any]]]] = {}
+    npc_has_conditions: dict[str, dict[str, list[tuple[str, str, str, bool]]]] = {}
+    npc_list_mutations: dict[str, dict[str, list[tuple[str, str, bool]]]] = {}
 
     for obj_id, obj_data in game_objects.items():
         if obj_id == player_handle:
@@ -67,14 +227,93 @@ def validate_quests(game_path: Path | str) -> list[str]:
             ink_file = find_ink_path(f"{ink_ref}.ink", dialogue_dir)
             if ink_file and ink_file.exists():
                 try:
-                    graph, _, get_conds, set_muts = analyze_ink_file(f"{ink_ref}.ink", dialogue_dir, game_path)
+                    (
+                        graph,
+                        _,
+                        get_conds,
+                        set_muts,
+                        has_conds,
+                        list_muts,
+                    ) = analyze_ink_file(f"{ink_ref}.ink", dialogue_dir, game_path)
                     npc_dialogue_graphs[obj_id] = graph
                     npc_get_conditions[obj_id] = get_conds
                     npc_set_mutations[obj_id] = set_muts
+                    npc_has_conditions[obj_id] = has_conds
+                    npc_list_mutations[obj_id] = list_muts
                 except (OSError, ValueError, TypeError):
                     pass
 
-    # Construct STRIPS Planning Problem using unified-planning
+    static_unreachable_knots: list[str] = []
+    stateful_npc_dialogues: dict[str, dict[str, set[str]]] = {}
+    relevant_knots_by_npc: dict[str, set[str]] = {}
+    for npc_id, graph in npc_dialogue_graphs.items():
+        reachable_knots = _collect_reachable_knots(graph)
+        relevant_knots_by_npc[npc_id] = reachable_knots
+
+        cond_map = npc_get_conditions.get(npc_id, {})
+        mut_map = npc_set_mutations.get(npc_id, {})
+        has_map = npc_has_conditions.get(npc_id, {})
+        list_map = npc_list_mutations.get(npc_id, {})
+        dyn = any(
+            bool(cond_list) for knot_name, cond_list in cond_map.items() if knot_name in reachable_knots
+        ) or any(
+            bool(mut_list) for knot_name, mut_list in mut_map.items() if knot_name in reachable_knots
+        ) or any(
+            bool(has_list) for knot_name, has_list in has_map.items() if knot_name in reachable_knots
+        ) or any(
+            bool(list_list) for knot_name, list_list in list_map.items() if knot_name in reachable_knots
+        )
+        if not dyn:
+            unreachable = sorted(set(graph) - reachable_knots)
+            static_unreachable_knots.extend(f"{npc_id}:{knot}" for knot in unreachable)
+            continue
+        stateful_npc_dialogues[npc_id] = graph
+
+    player_inv_path = resolve_bound_path("$player.inventory", player_handle)
+
+    # Construct STRIPS Planning Problem using unified-planning.
+    # We now prune to only state variables that can actually affect reachability
+    # in the reachable dialogue subgraph, so the planner sees only relevant state.
+    relevant_var_paths: set[str] = set()
+    relevant_list_paths: set[tuple[str, str]] = set()
+    for npc_id, graph in npc_dialogue_graphs.items():
+        relevant = relevant_knots_by_npc.get(npc_id, set())
+        if not relevant:
+            continue
+        for knot_name, cond_list in npc_get_conditions.get(npc_id, {}).items():
+            if knot_name not in relevant:
+                continue
+            for _, var_path, _ in cond_list:
+                relevant_var_paths.add(resolve_bound_path(var_path, npc_id))
+        for knot_name, mut_list in npc_set_mutations.get(npc_id, {}).items():
+            if knot_name not in relevant:
+                continue
+            for var_path, _ in mut_list:
+                relevant_var_paths.add(resolve_bound_path(var_path, npc_id))
+        for knot_name, has_list in npc_has_conditions.get(npc_id, {}).items():
+            if knot_name not in relevant:
+                continue
+            for _, list_path, item_name, _ in has_list:
+                relevant_list_paths.add((resolve_bound_path(list_path, npc_id), item_name))
+        for knot_name, list_list in npc_list_mutations.get(npc_id, {}).items():
+            if knot_name not in relevant:
+                continue
+            for list_path, item_name, _ in list_list:
+                relevant_list_paths.add((resolve_bound_path(list_path, npc_id), item_name))
+
+    quest_set_candidates: dict[str, list[tuple[str, str]]] = {
+        quest_id: [] for quest_id in quest_ids
+    }
+    for npc_id, mutations_by_knot in npc_set_mutations.items():
+        relevant = relevant_knots_by_npc.get(npc_id, set())
+        for knot_name, mutations in mutations_by_knot.items():
+            if knot_name not in relevant:
+                continue
+            for path, value in mutations:
+                for quest_id, target_path in quest_targets.items():
+                    if path == target_path and bool(value):
+                        quest_set_candidates[quest_id].append((npc_id, knot_name))
+
     problem = up.Problem("quest_reachability")
 
     Location = up.UserType("Location")
@@ -85,22 +324,25 @@ def validate_quests(game_path: Path | str) -> list[str]:
     at_knot = up.Fluent("at_knot", npc=NPC, k=Knot)
     in_explore = up.Fluent("in_explore")
     in_dialogue = up.Fluent("in_dialogue", npc=NPC)
+    quest_completed: dict[str, Any] = {}
 
     problem.add_fluent(at_room, default_initial_value=False)
     problem.add_fluent(at_knot, default_initial_value=False)
     problem.add_fluent(in_explore, default_initial_value=True)
     problem.add_fluent(in_dialogue, default_initial_value=False)
+    for index, quest_id in enumerate(quest_ids):
+        fluent = up.Fluent(f"quest_{index}_completed")
+        problem.add_fluent(fluent, default_initial_value=False)
+        quest_completed[quest_id] = fluent
 
-    # Collect all bound variables for get & set
-    all_bound_vars: set[str] = set()
-    for npc_id, cond_map in npc_get_conditions.items():
-        for knot_name, cond_list in cond_map.items():
-            for c in cond_list:
-                all_bound_vars.add(_bind_var_path(c[1], npc_id, w))
-    for npc_id, mut_map in npc_set_mutations.items():
-        for knot_name, mut_list in mut_map.items():
-            for m in mut_list:
-                all_bound_vars.add(_bind_var_path(m[0], npc_id, w))
+    def add_completion_effects(action: Any, mutations: list[tuple[str, Any]]) -> None:
+        for path, value in mutations:
+            for quest_id, target_path in quest_targets.items():
+                if path == target_path and bool(value):
+                    action.add_effect(quest_completed[quest_id], True)
+
+    # Collect all bound variables for reachable get & set actions only.
+    all_bound_vars = relevant_var_paths
 
     var_fluents_true: dict[str, Any] = {}
     var_fluents_false: dict[str, Any] = {}
@@ -115,6 +357,29 @@ def validate_quests(game_path: Path | str) -> list[str]:
         var_fluents_true[bound_var] = fl_true
         var_fluents_false[bound_var] = fl_false
 
+    # Collect bound list-item pairs for reachable has/add/remove actions only.
+    all_bound_has_items: set[tuple[str, str]] = set(relevant_list_paths)
+
+    # Also register items in rooms that the player can pick up, but only if they are
+    # relevant to a reachable guard or mutation.
+    for r_data in rooms.values():
+        for item in r_data.get("items", []):
+            if (player_inv_path, item) in relevant_list_paths:
+                all_bound_has_items.add((player_inv_path, item))
+
+    has_fluents_true: dict[tuple[str, str], Any] = {}
+    has_fluents_false: dict[tuple[str, str], Any] = {}
+    for idx, (bound_list, item) in enumerate(sorted(all_bound_has_items)):
+        fl_true = up.Fluent(f"has_{idx}_true")
+        fl_false = up.Fluent(f"has_{idx}_false")
+        problem.add_fluent(fl_true, default_initial_value=False)
+        problem.add_fluent(fl_false, default_initial_value=True)
+        init_has = _evaluate_has_initial_state(bound_list, item, w)
+        problem.set_initial_value(fl_true, init_has)
+        problem.set_initial_value(fl_false, not init_has)
+        has_fluents_true[(bound_list, item)] = fl_true
+        has_fluents_false[(bound_list, item)] = fl_false
+
     # Add room objects
     room_objs: dict[str, Any] = {}
     for r_name in rooms:
@@ -126,7 +391,33 @@ def validate_quests(game_path: Path | str) -> list[str]:
     if start_room in room_objs:
         problem.set_initial_value(at_room(room_objs[start_room]), True)
 
+    # Add room item pickups (take actions)
+    if profiler:
+        action_timer = profiler.time_actions("Explore Context")
+        action_timer.__enter__()
+    for r_name, r_data in rooms.items():
+        if r_name not in room_objs:
+            continue
+        for item in r_data.get("items", []):
+            item_fl = up.Fluent(f"item_in_{r_name}_{item}")
+            problem.add_fluent(item_fl, default_initial_value=True)
+            take_act = up.InstantaneousAction(f"take_{r_name}_{item}")
+            take_act.add_precondition(at_room(room_objs[r_name]))
+            take_act.add_precondition(in_explore)
+            take_act.add_precondition(item_fl)
+            take_act.add_effect(item_fl, False)
+            player_inv_key = (player_inv_path, item)
+            if player_inv_key in has_fluents_true:
+                take_act.add_effect(has_fluents_true[player_inv_key], True)
+                take_act.add_effect(has_fluents_false[player_inv_key], False)
+            problem.add_action(take_act)
+    if profiler:
+        action_timer.__exit__(None, None, None)
+
     # Add room transitions (move actions)
+    if profiler:
+        action_timer = profiler.time_actions("Explore Context")
+        action_timer.__enter__()
     for r_name, r_data in rooms.items():
         if r_name not in room_objs:
             continue
@@ -144,10 +435,15 @@ def validate_quests(game_path: Path | str) -> list[str]:
                 move_act.add_effect(at_room(room_objs[r_name]), False)
                 move_act.add_effect(at_room(room_objs[nxt]), True)
                 problem.add_action(move_act)
+    if profiler:
+        action_timer.__exit__(None, None, None)
 
     # Add NPC and Dialogue objects & actions
     all_npc_knots: dict[str, list[str]] = {}
-    for npc_id, graph in npc_dialogue_graphs.items():
+    if profiler:
+        action_timer = profiler.time_actions("Explore Context")
+        action_timer.__enter__()
+    for npc_id, graph in stateful_npc_dialogues.items():
         npc_obj = up.Object(npc_id, NPC)
         problem.add_object(npc_obj)
 
@@ -175,19 +471,43 @@ def validate_quests(game_path: Path | str) -> list[str]:
             talk_act.add_effect(at_knot(npc_obj, knot_objs["__root__"]), True)
             # Apply set mutations from __root__
             for set_k, set_v in npc_set_mutations.get(npc_id, {}).get("__root__", []):
-                bound_k = _bind_var_path(set_k, npc_id, w)
+                bound_k = resolve_bound_path(set_k, npc_id)
                 if bound_k in var_fluents_true:
                     val_bool = bool(set_v)
                     talk_act.add_effect(var_fluents_true[bound_k], val_bool)
                     talk_act.add_effect(var_fluents_false[bound_k], not val_bool)
+            add_completion_effects(
+                talk_act, npc_set_mutations.get(npc_id, {}).get("__root__", [])
+            )
+            # Apply list mutations from __root__
+            for list_path, item_name, is_add in npc_list_mutations.get(npc_id, {}).get("__root__", []):
+                bound_list = resolve_bound_path(list_path, npc_id)
+                key = (bound_list, item_name)
+                if key in has_fluents_true:
+                    talk_act.add_effect(has_fluents_true[key], is_add)
+                    talk_act.add_effect(has_fluents_false[key], not is_add)
             problem.add_action(talk_act)
+    if profiler:
+        action_timer.__exit__(None, None, None)
 
+    if profiler:
+        action_timer = profiler.time_actions("Dialogue")
+        action_timer.__enter__()
+    for npc_id, graph in stateful_npc_dialogues.items():
+        npc_obj = problem.object(npc_id)
+        knot_objs = {
+            knot_name: problem.object(f"{npc_id}_{knot_name}")
+            for knot_name in graph
+        }
         get_conds = npc_get_conditions.get(npc_id, {})
         set_muts = npc_set_mutations.get(npc_id, {})
+        has_conds = npc_has_conditions.get(npc_id, {})
+        list_muts = npc_list_mutations.get(npc_id, {})
         for src_knot, targets in graph.items():
             if src_knot not in knot_objs:
                 continue
             src_conds = get_conds.get(src_knot, [])
+            src_hass = has_conds.get(src_knot, [])
             for tgt_knot in targets:
                 if tgt_knot in knot_objs:
                     branch_act = up.InstantaneousAction(f"branch_{npc_id}_{src_knot}_to_{tgt_knot}")
@@ -200,20 +520,41 @@ def validate_quests(game_path: Path | str) -> list[str]:
                     cond_matches = [c for c in src_conds if c[0] == tgt_knot]
                     for cond in cond_matches:
                         _, var_path, negated = cond
-                        bound_k = _bind_var_path(var_path, npc_id, w)
+                        bound_k = resolve_bound_path(var_path, npc_id)
                         if bound_k in var_fluents_true:
                             if negated:
                                 branch_act.add_precondition(var_fluents_false[bound_k])
                             else:
                                 branch_act.add_precondition(var_fluents_true[bound_k])
 
+                    # Check has() guards for this target
+                    has_matches = [c for c in src_hass if c[0] == tgt_knot]
+                    for has_cond in has_matches:
+                        _, list_path, item_name, negated = has_cond
+                        bound_list = resolve_bound_path(list_path, npc_id)
+                        key = (bound_list, item_name)
+                        if key in has_fluents_true:
+                            if negated:
+                                branch_act.add_precondition(has_fluents_false[key])
+                            else:
+                                branch_act.add_precondition(has_fluents_true[key])
+
                     # Apply set() mutations from target knot
                     for set_k, set_v in set_muts.get(tgt_knot, []):
-                        bound_k = _bind_var_path(set_k, npc_id, w)
+                        bound_k = resolve_bound_path(set_k, npc_id)
                         if bound_k in var_fluents_true:
                             val_bool = bool(set_v)
                             branch_act.add_effect(var_fluents_true[bound_k], val_bool)
                             branch_act.add_effect(var_fluents_false[bound_k], not val_bool)
+                    add_completion_effects(branch_act, set_muts.get(tgt_knot, []))
+
+                    # Apply list mutations from target knot
+                    for list_path, item_name, is_add in list_muts.get(tgt_knot, []):
+                        bound_list = resolve_bound_path(list_path, npc_id)
+                        key = (bound_list, item_name)
+                        if key in has_fluents_true:
+                            branch_act.add_effect(has_fluents_true[key], is_add)
+                            branch_act.add_effect(has_fluents_false[key], not is_add)
 
                     problem.add_action(branch_act)
 
@@ -225,24 +566,94 @@ def validate_quests(game_path: Path | str) -> list[str]:
             end_act.add_effect(at_knot(npc_obj, knot_objs[src_knot]), False)
             end_act.add_effect(in_explore, True)
             problem.add_action(end_act)
+    if profiler:
+        action_timer.__exit__(None, None, None)
 
-    # Test reachability of every knot for every reachable NPC dialogue
-    unreachable_knots: list[str] = []
-    with up.OneshotPlanner(problem_kind=problem.kind) as planner:
-        for npc_id, knot_list in all_npc_knots.items():
-            npc_obj = problem.object(npc_id)
-            for knot_name in knot_list:
-                k_obj = problem.object(f"{npc_id}_{knot_name}")
+    # Test only the completion goals declared by quest definitions. This avoids
+    # restarting the planner for every dialogue knot.
+    incomplete_quests = [
+        quest_id
+        for quest_id in quest_ids
+        if not quest_set_candidates.get(quest_id)
+    ]
+    state_example = []
+    if profiler:
+        for fluent in problem.fluents:
+            if not fluent.signature and problem.initial_value(fluent()).is_true():
+                state_example.append(str(fluent))
+        state_example.append(f"at_room({start_room})")
+    if profiler:
+        checked_quests: set[str] = set()
+        with up.OneshotPlanner(
+            names=_planner_names(), problem_kind=problem.kind
+        ) as planner:
+            profiler.planner_name = planner.name
+            for quest_id in quest_ids:
+                if not quest_set_candidates.get(quest_id):
+                    continue
+                checked_quests.add(quest_id)
                 problem.clear_goals()
-                problem.add_goal(at_knot(npc_obj, k_obj))
+                problem.add_goal(quest_completed[quest_id])
+                if profiler.expired():
+                    break
+                profiler.solver_calls += 1
+                solve_started = monotonic()
+                try:
+                    with _hard_timeout(profiler.remaining()):
+                        res = planner.solve(problem)
+                except TimeoutError:
+                    profiler.stopped = True
+                    profiler.stop_reason = "planner solve timed out"
+                    solve_seconds = monotonic() - solve_started
+                    profiler.solver_seconds += solve_seconds
+                    profiler.solver_records.append(
+                        {
+                            "goal": f"quest:{quest_id}",
+                            "seconds": solve_seconds,
+                            "status": "TIMEOUT",
+                        }
+                    )
+                    break
+                solve_seconds = monotonic() - solve_started
+                profiler.solver_seconds += solve_seconds
+                profiler.solver_records.append(
+                    {
+                        "goal": f"quest:{quest_id}",
+                        "seconds": solve_seconds,
+                        "status": res.status.name,
+                    }
+                )
+                if res.status.name not in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
+                    incomplete_quests.append(quest_id)
+                if profiler.expired():
+                    break
+            if profiler.stopped:
+                incomplete_quests.extend(
+                    quest_id
+                    for quest_id in quest_ids
+                    if quest_id not in checked_quests
+                    and quest_set_candidates.get(quest_id)
+                )
+        # The timeout path above intentionally stops checking later quests.
+    else:
+        with up.OneshotPlanner(
+            names=_planner_names(), problem_kind=problem.kind
+        ) as planner:
+            for quest_id in quest_ids:
+                if not quest_set_candidates.get(quest_id):
+                    continue
+                problem.clear_goals()
+                problem.add_goal(quest_completed[quest_id])
                 res = planner.solve(problem)
                 if res.status.name not in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
-                    unreachable_knots.append(f"{npc_id}:{knot_name}")
+                    incomplete_quests.append(quest_id)
 
-    if unreachable_knots:
-        print(f"Warning: unreachable dialogue knots: {', '.join(sorted(unreachable_knots))}")
+    if incomplete_quests:
+        print(f"Warning: quests not completable: {', '.join(sorted(set(incomplete_quests)))}")
+    if profiler:
+        profiler.report(problem, state_example)
 
-    return unreachable_knots
+    return sorted(set(incomplete_quests))
 
 
 def validate_world(game_path: Path | str) -> list[str]:
@@ -265,4 +676,4 @@ class QuestValidator:
 
 if __name__ == "__main__":
     game_dir = argv[1]
-    validate_quests(Path(f"{game_dir}"))
+    validate_quests(Path(f"{game_dir}"), profile="--profile" in argv[2:])

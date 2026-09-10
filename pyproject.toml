@@ -21,3 +21,6 @@ dev = [
     "mypy>=1.0",
     "ruff>=0.1.0",
 ]
+planning = [
+    "up-fast-downward>=0.5.2",
+]

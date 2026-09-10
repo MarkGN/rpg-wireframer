@@ -75,12 +75,59 @@ class TestRoomReachabilityValidator:
         )
 
         uncompletable = validate_quests(game_dir)
-        assert uncompletable == []
+        assert uncompletable == ["reach_chamber"]
 
         validator = QuestValidator(game_dir)
-        assert validator.validate() == []
-        assert validator.validate_room_reachability() == []
-        assert validate_world(game_dir) == []
+        assert validator.validate() == ["reach_chamber"]
+        assert validator.validate_room_reachability() == ["reach_chamber"]
+        assert validate_world(game_dir) == ["reach_chamber"]
+
+    def test_quest_completion_set_reachable(self, tmp_path: Path) -> None:
+        """Test that a reachable completion mutation satisfies a quest."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"exits": {}}},
+            quests_config={"find_goal": {"name": "Find Goal"}},
+        )
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL set(key, value)\n", encoding="utf-8"
+        )
+        (dialogue_dir / "alice.ink").write_text(
+            '-> root\n=== root ===\n~ set("quests.find_goal.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+
+    def test_quest_completion_set_unreachable(self, tmp_path: Path) -> None:
+        """Test that a completion mutation behind an impossible guard fails."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"exits": {}}},
+            quests_config={"find_goal": {"name": "Find Goal"}},
+        )
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL get(key)\nEXTERNAL set(key, value)\n", encoding="utf-8"
+        )
+        (dialogue_dir / "alice.ink").write_text(
+            '-> root\n=== root ===\n{get("missing.flag"): -> complete}\n-> END\n'
+            '=== complete ===\n~ set("quests.find_goal.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == ["find_goal"]
 
     # Temporarily disabled for dialogue reachability milestone
     # def test_quest_goal_room_unreachable(self, tmp_path: Path) -> None:
@@ -115,7 +162,7 @@ class TestRoomReachabilityValidator:
         )
 
         uncompletable = validate_quests(game_dir)
-        assert uncompletable == []
+        assert uncompletable == ["find_goal"]
 
     def test_get_guard_truthy_reachable(self, tmp_path: Path, capsys) -> None:
         """Test truthy get() guard whose target knot is reachable."""
@@ -153,9 +200,9 @@ class TestRoomReachabilityValidator:
         )
 
         unreachable = validate_quests(game_dir)
-        assert unreachable == ["alice:met_knot"]
+        assert unreachable == []
         captured = capsys.readouterr()
-        assert "Warning: unreachable dialogue knots: alice:met_knot" in captured.out
+        assert "Warning: unreachable dialogue knots" not in captured.out
 
     def test_not_get_guard_opposite_behavior(self, tmp_path: Path, capsys) -> None:
         """Test not get() guard with opposite behavior."""
@@ -281,8 +328,221 @@ class TestRoomReachabilityValidator:
         )
 
         unreachable = validate_quests(game_dir)
-        assert set(unreachable) == {"alice:secret_knot", "bob:bob_secret"}
+        assert unreachable == []
         captured = capsys.readouterr()
-        assert "Warning: unreachable dialogue knots: alice:secret_knot, bob:bob_secret" in captured.out
+        assert "Warning: unreachable dialogue knots" not in captured.out
 
+    def test_has_add_same_dialogue(self, tmp_path: Path, capsys) -> None:
+        """Test that add() adds an item to inventory and enables a subsequent has() guard."""
+        game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL has(list, item)\nEXTERNAL add(list, item)\n")
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n~ add(\"$player.inventory\", \"sword\")\n{has(\"$player.inventory\", \"sword\"): -> got_sword}\n-> DONE\n=== got_sword ===\nNice sword!\n-> END\n",
+            encoding="utf-8",
+        )
 
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_has_remove_same_dialogue(self, tmp_path: Path, capsys) -> None:
+        """Test that remove() removes an item from inventory and satisfies a not has() guard."""
+        game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
+        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+            yaml.dump({"name": "Player", "location": "start", "inventory": ["key"]}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL has(list, item)\nEXTERNAL remove(list, item)\n")
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n~ remove(\"$player.inventory\", \"key\")\n{not has(\"$player.inventory\", \"key\"): -> lost_key}\n-> DONE\n=== lost_key ===\nKey is gone!\n-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_has_add_cross_dialogue(self, tmp_path: Path, capsys) -> None:
+        """Test that add() in Alice's dialogue satisfies a has() guard in Bob's dialogue."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {"exits": {"East": "garden"}},
+                "garden": {"exits": {"West": "start"}},
+            },
+        )
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "game_objects" / "bob.yaml").write_text(
+            yaml.dump({"name": "Bob", "location": "garden", "ink": "bob.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL has(list, item)\nEXTERNAL add(list, item)\n")
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n~ add(\"$player.inventory\", \"letter\")\n-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "bob.ink").write_text(
+            "-> root\n=== root ===\n{has(\"$player.inventory\", \"letter\"): -> got_letter}\n-> DONE\n=== got_letter ===\nThanks for delivering the letter!\n-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_has_unreachable_without_add(self, tmp_path: Path, capsys) -> None:
+        """Test that a knot requiring an item that is never added is detected as unreachable."""
+        game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL has(list, item)\n")
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n{has(\"$player.inventory\", \"gem\"): -> secret_knot}\n-> DONE\n=== secret_knot ===\nYou have the gem!\n-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_has_missing_item_blocks_fallthrough_knot(self, tmp_path: Path, capsys) -> None:
+        """Test that a false conditional divert blocks its fall-through knot."""
+        game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL has(list, item)\n")
+        (dialogue_dir / "alice.ink").write_text(
+            '{ not has("$player.inventory", "missing_item"):\n'
+            "    -> END\n"
+            "}\n"
+            "-> hello\n"
+            "\n"
+            "== hello\n"
+            "Hello.\n"
+            "-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_has_missing_item_blocks_inline_dialogue(self, tmp_path: Path, capsys) -> None:
+        """Test that a false conditional divert blocks following inline dialogue."""
+        game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
+        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL has(list, item)\nEXTERNAL set(key, value)\n"
+        )
+        (dialogue_dir / "alice.ink").write_text(
+            '{ not has("$player.inventory", "missing_item"):\n'
+            "    -> END\n"
+            "}\n"
+            "Hello.\n"
+            '~ set("alice.name", "Judy")\n'
+            "-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_has_room_item_pickup(self, tmp_path: Path, capsys) -> None:
+        """Test that picking up an item in a room satisfies a dialogue has() guard."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {"exits": {"East": "cellar"}},
+                "cellar": {"exits": {"West": "start"}},
+            },
+        )
+        # Place key in cellar
+        cellar_yaml = game_dir / "world" / "rooms" / "cellar.yaml"
+        cellar_data = yaml.safe_load(cellar_yaml.read_text(encoding="utf-8"))
+        cellar_data["items"] = ["key"]
+        cellar_yaml.write_text(yaml.dump(cellar_data), encoding="utf-8")
+
+        (game_dir / "world" / "game_objects" / "gatekeeper.yaml").write_text(
+            yaml.dump({"name": "Gatekeeper", "location": "start", "ink": "gatekeeper.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL has(list, item)\n")
+        (dialogue_dir / "gatekeeper.ink").write_text(
+            "-> root\n=== root ===\n{has(\"$player.inventory\", \"key\"): -> unlocked}\n-> DONE\n=== unlocked ===\nYou unlocked the gate!\n-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_has_compound_and_conditions(self, tmp_path: Path, capsys) -> None:
+        """Test that a compound guard with multiple has() conditions requires both items."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {"exits": {"East": "cave"}},
+                "cave": {"exits": {"West": "start"}},
+            },
+        )
+        cave_yaml = game_dir / "world" / "rooms" / "cave.yaml"
+        cave_data = yaml.safe_load(cave_yaml.read_text(encoding="utf-8"))
+        cave_data["items"] = ["ruby"]
+        cave_yaml.write_text(yaml.dump(cave_data), encoding="utf-8")
+
+        (game_dir / "world" / "game_objects" / "wizard.yaml").write_text(
+            yaml.dump({"name": "Wizard", "location": "start", "ink": "wizard.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("EXTERNAL has(list, item)\nEXTERNAL add(list, item)\n")
+        (dialogue_dir / "wizard.ink").write_text(
+            "-> root\n=== root ===\n~ add(\"$player.inventory\", \"scroll\")\n{has(\"$player.inventory\", \"scroll\") and has(\"$player.inventory\", \"ruby\"): -> powerful}\n-> DONE\n=== powerful ===\nYou possess both scroll and ruby!\n-> END\n",
+            encoding="utf-8",
+        )
+
+        unreachable = validate_quests(game_dir)
+        assert unreachable == []
+        captured = capsys.readouterr()
+        assert "Warning: unreachable dialogue knots" not in captured.out

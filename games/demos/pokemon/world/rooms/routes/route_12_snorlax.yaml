@@ -4,5 +4,5 @@ exits:
   Rt. 11: route_11
   Rt. 12 South: route_12_south
   Rt. 12 North: route_12
-items:
+objects:
   - snorlax

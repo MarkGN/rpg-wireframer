@@ -4,4 +4,4 @@ exits:
   Fuschia City: fuschia
   Rest house: safari_rest
   Hidden house: safari_hidden
-items: gold_teeth
+items: [gold_teeth]
