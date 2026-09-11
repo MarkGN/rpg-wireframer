@@ -15,7 +15,10 @@ function activate(context) {
     };
 
     const clientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'yaml' }],
+        documentSelector: [
+            { scheme: 'file', language: 'yaml' },
+            { scheme: 'file', language: 'ink' }
+        ],
         synchronize: {
             fileEvents: vscode.workspace.createFileSystemWatcher('**/*.yaml')
         }

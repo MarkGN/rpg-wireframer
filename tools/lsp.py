@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 import json
+import re
 import sys
 import urllib.parse
 from pathlib import Path
+
+import yaml
 
 
 def uri_to_path(uri: str) -> Path:
@@ -23,7 +26,9 @@ def find_game_root(file_path: Path) -> Path | None:
     return None
 
 
-def extract_object_at_position(file_path: Path, line: int, character: int) -> str | None:
+def extract_token_at_position(
+    file_path: Path, line: int, character: int
+) -> str | None:
     if not file_path.exists():
         return None
 
@@ -61,12 +66,159 @@ def extract_object_at_position(file_path: Path, line: int, character: int) -> st
     return token
 
 
-def find_definitions(game_root: Path, object_name: str) -> list[dict]:
-    locations = []
-    go_path = game_root / "world" / "objects" / f"{object_name}.yaml"
-    ink_path = game_root / "dialogue" / f"{object_name}.ink"
+def read_lines(file_path: Path) -> list[str] | None:
+    try:
+        return file_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
 
-    if go_path.is_file():
+
+def section_at_position(
+    lines: list[str], line: int
+) -> tuple[str, int, int] | None:
+    section = None
+    section_indent = 0
+    section_line = 0
+    for current_line_number, current_line in enumerate(lines[: line + 1]):
+        match = re.match(r"^(\s*)(exits|objects):\s*(?:#.*)?$", current_line)
+        if match:
+            section = match.group(2)
+            section_indent = len(match.group(1))
+            section_line = current_line_number
+            continue
+
+        if current_line.strip() and len(current_line) - len(current_line.lstrip()) <= section_indent:
+            section = None
+
+    if section is None:
+        return None
+    return section, section_indent, section_line
+
+
+def extract_room_reference_at_position(
+    file_path: Path, line: int, character: int
+) -> str | None:
+    lines = read_lines(file_path)
+    if lines is None or line < 0 or line >= len(lines):
+        return None
+
+    section = section_at_position(lines, line)
+    if section is None or section[0] != "exits":
+        return None
+
+    token = extract_token_at_position(file_path, line, character)
+    if token is None:
+        return None
+
+    match = re.match(r"^\s*[^:#]+:\s*([^#\s]+)", lines[line])
+    if match:
+        return match.group(1)
+    return token
+
+
+def extract_object_reference_at_position(
+    file_path: Path, line: int, character: int
+) -> tuple[str, str | None] | None:
+    lines = read_lines(file_path)
+    if lines is None or line < 0 or line >= len(lines):
+        return None
+
+    section = section_at_position(lines, line)
+    if section is None or section[0] != "objects":
+        return None
+
+    section_line = section[2]
+    current_object = None
+    current_ink = None
+    for current_line in lines[section_line + 1 : line + 1]:
+        entry = re.match(
+            r"^\s*-\s*(?:([A-Za-z0-9_-]+)\s*:|([A-Za-z0-9_.-]+))",
+            current_line,
+        )
+        if entry:
+            current_object = entry.group(1) or entry.group(2)
+            current_ink = None
+            continue
+
+        if current_object is not None:
+            ink = re.match(r"^\s+ink:\s*([^#\s]+)", current_line)
+            if ink:
+                current_ink = ink.group(1)
+
+    if current_object is None:
+        return None
+    return current_object, current_ink
+
+
+def find_named_file(directory: Path, name: str) -> Path | None:
+    requested = Path(name)
+    candidates = [directory / requested]
+    if requested.suffix not in (".yaml", ".yml"):
+        candidates.extend(
+            [directory / f"{name}.yaml", directory / f"{name}.yml"]
+        )
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    filename = requested.name
+    for candidate in directory.rglob("*"):
+        if candidate.is_file() and candidate.name in {
+            filename,
+            f"{filename}.yaml",
+            f"{filename}.yml",
+        }:
+            return candidate
+    return None
+
+
+def find_ink_file(directory: Path, name: str) -> Path | None:
+    requested = Path(name)
+    if requested.suffix != ".ink":
+        requested = requested.with_suffix(".ink")
+
+    direct = directory / requested
+    if direct.is_file():
+        return direct
+
+    for candidate in directory.rglob(requested.name):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def object_ink_name(object_path: Path, inline_ink: str | None) -> str:
+    if inline_ink:
+        return inline_ink
+
+    try:
+        with object_path.open(encoding="utf-8") as stream:
+            object_data = yaml.safe_load(stream) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        object_data = {}
+
+    override = object_data.get("ink")
+    return override if isinstance(override, str) and override else object_path.stem
+
+
+def find_definitions(
+    game_root: Path,
+    name: str,
+    reference_type: str = "object",
+    inline_ink: str | None = None,
+) -> list[dict]:
+    locations = []
+    if reference_type == "room":
+        target = find_named_file(game_root / "world" / "rooms", name)
+        targets = [target] if target else []
+    else:
+        target = find_named_file(game_root / "world" / "objects", name)
+        targets = [target] if target else []
+
+    for go_path in targets:
+        if go_path is None:
+            continue
         locations.append({
             "uri": path_to_uri(go_path),
             "range": {
@@ -75,14 +227,21 @@ def find_definitions(game_root: Path, object_name: str) -> list[dict]:
             },
         })
 
-    if ink_path.is_file():
-        locations.append({
-            "uri": path_to_uri(ink_path),
-            "range": {
-                "start": {"line": 0, "character": 0},
-                "end": {"line": 0, "character": 0},
-            },
-        })
+    if reference_type == "object":
+        ink_name = (
+            object_ink_name(target, inline_ink)
+            if target is not None
+            else (inline_ink or name)
+        )
+        ink_path = find_ink_file(game_root / "dialogue", ink_name)
+        if ink_path is not None:
+            locations.append({
+                "uri": path_to_uri(ink_path),
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 0},
+                },
+            })
 
     return locations
 
@@ -135,9 +294,28 @@ class WireframerLS:
 
             locations = []
             if game_root:
-                obj_name = extract_object_at_position(file_path, line, character)
-                if obj_name:
-                    locations = find_definitions(game_root, obj_name)
+                room_name = extract_room_reference_at_position(
+                    file_path, line, character
+                )
+                if room_name:
+                    locations = find_definitions(game_root, room_name, "room")
+                else:
+                    object_reference = extract_object_reference_at_position(
+                        file_path, line, character
+                    )
+                    if object_reference:
+                        object_name, inline_ink = object_reference
+                        locations = find_definitions(
+                            game_root, object_name, "object", inline_ink
+                        )
+                    elif (
+                        file_path.suffix == ".ink"
+                        and game_root / "dialogue" in file_path.parents
+                        and file_path.name != "globals.ink"
+                    ):
+                        locations = find_definitions(
+                            game_root, file_path.stem, "object"
+                        )
 
             self.send_response({
                 "jsonrpc": "2.0",

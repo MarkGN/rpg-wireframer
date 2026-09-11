@@ -11,8 +11,22 @@
     "Programming Languages"
   ],
   "activationEvents": [
-    "onLanguage:yaml"
+    "onLanguage:yaml",
+    "onLanguage:ink"
   ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "ink",
+        "extensions": [
+          ".ink"
+        ],
+        "aliases": [
+          "Ink"
+        ]
+      }
+    ]
+  },
   "main": "./client/extension.js",
   "dependencies": {
     "vscode-languageclient": "^8.1.0"
