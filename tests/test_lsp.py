@@ -45,7 +45,7 @@ class TestLSP(unittest.TestCase):
         def_res = read()
         uris = [item["uri"] for item in def_res["result"]]
 
-        expected_go = (ROOT_DIR / "games/demos/pokemon/world/game_objects/red.yaml").as_uri()
+        expected_go = (ROOT_DIR / "games/demos/pokemon/world/objects/red.yaml").as_uri()
         expected_ink = (ROOT_DIR / "games/demos/pokemon/dialogue/red.ink").as_uri()
 
         self.assertIn(expected_go, uris)

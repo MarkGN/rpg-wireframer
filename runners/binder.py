@@ -8,13 +8,13 @@ def resolve_path(path: str) -> str:
         "items",
         "quests",
         "variables",
-        "game_objects",
+        "objects",
         "global",
     }
     first = path.split(".")[0]
     if first in roots:
         return path
-    return f"game_objects.{path}"
+    return f"objects.{path}"
 
 
 class Binder:

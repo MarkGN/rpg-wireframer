@@ -23,18 +23,18 @@ def find_ink_path(ink_filename: str, dialogue_dir: Path) -> Path | None:
     return None
 
 
-def validate_game_objects(game_path: Path | str) -> None:
+def validate_objects(game_path: Path | str) -> None:
     game_path = Path(game_path)
     w = world.World(game_path)
     dialogue_dir = game_path / "dialogue"
 
     item_handles = set(w.world_state["items"].keys())
-    game_objects = w.world_state["game_objects"]
+    objects = w.world_state["objects"]
 
-    if not game_objects:
-        raise ValueError(f"No game objects found in {w.game_objects_dir}")
+    if not objects:
+        raise ValueError(f"No game objects found in {w.objects_dir}")
 
-    for object_id, data in sorted(game_objects.items()):
+    for object_id, data in sorted(objects.items()):
         name = data.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"Game object {object_id} must have a non-empty name")
@@ -74,4 +74,4 @@ def validate_game_objects(game_path: Path | str) -> None:
 if __name__ == "__main__":
     import sys
 
-    validate_game_objects(Path(sys.argv[1]))
+    validate_objects(Path(sys.argv[1]))

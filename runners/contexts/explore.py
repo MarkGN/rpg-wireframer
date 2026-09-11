@@ -19,7 +19,7 @@ class Explore(Context):
         present_npcs = [
             Action(InteractType.TALK, npc)
             for npc in world.npcs_in_room()
-            for npc_data in (world.world_state["game_objects"][npc],)
+            for npc_data in (world.world_state["objects"][npc],)
             if (npc_data["is_visible"] and npc != world.player_handle)
         ]
         items = [
@@ -46,7 +46,7 @@ class Explore(Context):
                     return
                 accosting = None
                 for npc_id in world.world_state["rooms"][destination].get("objects", []):
-                    if world.world_state["game_objects"].get(npc_id, {}).get("accosts", False):
+                    if world.world_state["objects"].get(npc_id, {}).get("accosts", False):
                         accosting = npc_id
                         break
                 if accosting:

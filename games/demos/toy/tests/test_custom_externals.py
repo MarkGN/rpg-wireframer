@@ -70,15 +70,15 @@ def test_custom_external_function_prints_placeholder(tmp_path: Path) -> None:
 
     world_dir = tmp_path / "world"
     (world_dir / "rooms").mkdir(parents=True)
-    (world_dir / "game_objects").mkdir(parents=True)
+    (world_dir / "objects").mkdir(parents=True)
     (world_dir / "items").mkdir(parents=True)
     (tmp_path / "dialogue").mkdir(parents=True)
 
     (world_dir / "game.yaml").write_text("player: hero\n", encoding="utf-8")
-    (world_dir / "game_objects" / "hero.yaml").write_text(
+    (world_dir / "objects" / "hero.yaml").write_text(
         "name: Hero\nlocation: start\ninventory: []\n", encoding="utf-8"
     )
-    (world_dir / "game_objects" / "alice.yaml").write_text(
+    (world_dir / "objects" / "alice.yaml").write_text(
         "name: Alice\n", encoding="utf-8"
     )
     (world_dir / "rooms" / "start.yaml").write_text(

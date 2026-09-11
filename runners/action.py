@@ -48,7 +48,7 @@ def render_action(world: Any, action: Action) -> str:
 
     if interact_type == InteractType.TALK:
         if isinstance(target, str):
-            object_meta = world.world_state["game_objects"].get(target, {})
+            object_meta = world.world_state["objects"].get(target, {})
             prompt = object_meta.get("interact_prompt", "Talk to")
             name = object_meta.get("name", target)
             return f"{prompt} {name}"

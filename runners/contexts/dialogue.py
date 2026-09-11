@@ -56,7 +56,7 @@ class Dialogue(Context):
             shop(inventory)
         """
         self.world = world
-        meta = world.world_state["game_objects"].get(self.npc, {})
+        meta = world.world_state["objects"].get(self.npc, {})
         dialogue_dir = Path(world.game_path) / "dialogue"
         json_path = ink_json_path(meta.get("ink", f"{self.npc}") + ".ink", dialogue_dir)
         if json_path is None:
@@ -130,8 +130,8 @@ class Dialogue(Context):
         def ext_at_npc(npc: str):
             return npc in world.npcs_in_room()
 
-        def ext_move_npc(game_object: str, source_room: str, destination_room: str):
-            world.move_object(binder(game_object).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1])
+        def ext_move_npc(object: str, source_room: str, destination_room: str):
+            world.move_object(binder(object).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1])
 
         def ext_pass() -> None:
             """Move the player into the room that was blocked when this dialogue began."""

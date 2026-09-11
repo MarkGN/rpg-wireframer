@@ -63,7 +63,7 @@ def extract_object_at_position(file_path: Path, line: int, character: int) -> st
 
 def find_definitions(game_root: Path, object_name: str) -> list[dict]:
     locations = []
-    go_path = game_root / "world" / "game_objects" / f"{object_name}.yaml"
+    go_path = game_root / "world" / "objects" / f"{object_name}.yaml"
     ink_path = game_root / "dialogue" / f"{object_name}.ink"
 
     if go_path.is_file():

@@ -15,7 +15,7 @@ validate-rooms:
 	PYTHONPATH=. python -m validate.rooms $(GAME)
 
 validate-game-object:
-	PYTHONPATH=. python -m validate.game_objects $(GAME)
+	PYTHONPATH=. python -m validate.objects $(GAME)
 
 validate-quests:
 	PYTHONPATH=. python -m validate.quests $(GAME)

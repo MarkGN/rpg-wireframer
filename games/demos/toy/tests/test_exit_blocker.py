@@ -14,15 +14,15 @@ def test_exit_blocker_triggers_dialogue_and_pass(tmp_path: Path) -> None:
 
     world_dir = tmp_path / "world"
     (world_dir / "rooms").mkdir(parents=True)
-    (world_dir / "game_objects").mkdir(parents=True)
+    (world_dir / "objects").mkdir(parents=True)
     (world_dir / "items").mkdir(parents=True)
     (tmp_path / "dialogue").mkdir(parents=True)
 
     (world_dir / "game.yaml").write_text("player: hero\n", encoding="utf-8")
-    (world_dir / "game_objects" / "hero.yaml").write_text(
+    (world_dir / "objects" / "hero.yaml").write_text(
         "name: Hero\nlocation: myroom\ninventory: []\n", encoding="utf-8"
     )
-    (world_dir / "game_objects" / "blue_lock.yaml").write_text(
+    (world_dir / "objects" / "blue_lock.yaml").write_text(
         "name: Blue Lock\n", encoding="utf-8"
     )
     (world_dir / "rooms" / "myroom.yaml").write_text(
@@ -62,7 +62,7 @@ def test_exit_blocker_triggers_dialogue_and_pass(tmp_path: Path) -> None:
     )
 
     world = World(tmp_path)
-    assert "blue_lock" in world.world_state["game_objects"]
+    assert "blue_lock" in world.world_state["objects"]
     assert world.current_room == "myroom"
 
     # Trying to go through the blocked exit triggers dialogue with blue_lock
@@ -78,12 +78,12 @@ def test_exit_blocker_triggers_dialogue_and_pass(tmp_path: Path) -> None:
 def test_exit_blocker_unblocked_exit_moves_normally(tmp_path: Path) -> None:
     world_dir = tmp_path / "world"
     (world_dir / "rooms").mkdir(parents=True)
-    (world_dir / "game_objects").mkdir(parents=True)
+    (world_dir / "objects").mkdir(parents=True)
     (world_dir / "items").mkdir(parents=True)
     (tmp_path / "dialogue").mkdir(parents=True)
 
     (world_dir / "game.yaml").write_text("player: hero\n", encoding="utf-8")
-    (world_dir / "game_objects" / "hero.yaml").write_text(
+    (world_dir / "objects" / "hero.yaml").write_text(
         "name: Hero\nlocation: myroom\ninventory: []\n", encoding="utf-8"
     )
     (world_dir / "rooms" / "myroom.yaml").write_text(
@@ -114,11 +114,11 @@ def test_exit_blocker_unblocked_exit_moves_normally(tmp_path: Path) -> None:
 def test_exit_blocker_unknown_blocker_exits(tmp_path: Path) -> None:
     world_dir = tmp_path / "world"
     (world_dir / "rooms").mkdir(parents=True)
-    (world_dir / "game_objects").mkdir(parents=True)
+    (world_dir / "objects").mkdir(parents=True)
     (world_dir / "items").mkdir(parents=True)
 
     (world_dir / "game.yaml").write_text("player: hero\n", encoding="utf-8")
-    (world_dir / "game_objects" / "hero.yaml").write_text(
+    (world_dir / "objects" / "hero.yaml").write_text(
         "name: Hero\nlocation: myroom\ninventory: []\n", encoding="utf-8"
     )
     (world_dir / "rooms" / "myroom.yaml").write_text(

@@ -21,7 +21,7 @@ def _create_game(
     game_dir = tmp_path / "game"
     world_dir = game_dir / "world"
     rooms_dir = world_dir / "rooms"
-    objects_dir = world_dir / "game_objects"
+    objects_dir = world_dir / "objects"
 
     rooms_dir.mkdir(parents=True)
     objects_dir.mkdir(parents=True)

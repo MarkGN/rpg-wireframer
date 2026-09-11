@@ -194,7 +194,7 @@ def validate_quests(
     game_path = Path(game_path)
     w = world.World(game_path)
     rooms = w.world_state["rooms"]
-    game_objects = w.world_state["game_objects"]
+    objects = w.world_state["objects"]
     player_handle = w.player_handle
     start_room = w.current_room
     dialogue_dir = game_path / "dialogue"
@@ -220,7 +220,7 @@ def validate_quests(
     npc_list_mutations: dict[str, dict[str, list[tuple[str, str, bool]]]] = {}
     npc_move_mutations: dict[str, dict[str, list[tuple[str, str, str]]]] = {}
 
-    for obj_id, obj_data in game_objects.items():
+    for obj_id, obj_data in objects.items():
         if obj_id == player_handle:
             continue
         ink_ref = obj_data.get("ink", obj_data.get("dialogue", f"{obj_id}.ink"))
@@ -309,7 +309,7 @@ def validate_quests(
     def move_targets_player(target: str, npc_id: str) -> bool:
         return resolve_bound_path(target, npc_id) in {
             player_handle,
-            f"game_objects.{player_handle}",
+            f"objects.{player_handle}",
         }
 
     movement_interceptors: dict[tuple[str, str], str] = {}
@@ -331,7 +331,7 @@ def validate_quests(
             )
             if interceptor is None:
                 for object_id in source_objects:
-                    object_data = game_objects.get(object_id, {})
+                    object_data = objects.get(object_id, {})
                     guards = object_data.get("guards_exits", [])
                     if isinstance(guards, str):
                         guards = [guards]
@@ -346,7 +346,7 @@ def validate_quests(
                         break
             if interceptor is None:
                 for object_id in rooms[destination].get("objects", []):
-                    if game_objects.get(object_id, {}).get("accosts", False):
+                    if objects.get(object_id, {}).get("accosts", False):
                         interceptor = object_id
                         movement_accost_interceptors.add((source, destination))
                         movement_accost_paths.add(
@@ -593,7 +593,7 @@ def validate_quests(
         except SystemExit:
             pass
         if not npc_room:
-            npc_room = game_objects.get(npc_id, {}).get("location")
+            npc_room = objects.get(npc_id, {}).get("location")
 
         if npc_room in room_objs:
             talk_act = up.InstantaneousAction(f"talk_{npc_id}")

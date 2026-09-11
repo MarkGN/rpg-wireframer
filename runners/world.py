@@ -36,7 +36,7 @@ class World:
         self.custom_external_input = custom_external_input
         world_dir = game_path / "world"
         self.rooms_dir: Path = world_dir / "rooms"
-        self.game_objects_dir: Path = world_dir / "game_objects"
+        self.objects_dir: Path = world_dir / "objects"
         self.items_dir: Path = world_dir / "items"
         self.game_file: Path = world_dir / "game.yaml"
         self.flags_file: Path = world_dir / "flags.yaml"
@@ -76,10 +76,10 @@ class World:
             self.world_state["items"][item_id] = data
 
         # Game Objects such as NPCs
-        raw_game_objects: dict[str, dict[str, Any]] = {}
-        for path in sorted(self.game_objects_dir.rglob("*.yaml")):
+        raw_objects: dict[str, dict[str, Any]] = {}
+        for path in sorted(self.objects_dir.rglob("*.yaml")):
             npc_id = path.stem
-            raw_game_objects[npc_id] = load_yaml(path)
+            raw_objects[npc_id] = load_yaml(path)
 
         # Add inline room-defined objects as virtual game objects.
         for room_id, room_data in self.world_state["rooms"].items():
@@ -96,25 +96,25 @@ class World:
                         sys.exit(
                             f"Error: inline object entry in room '{room_id}' must be a mapping, got {object_entry!r}."
                         )
-                    raw_game_objects[f"{room_id}-object{ct}"] = dict(object_data)
+                    raw_objects[f"{room_id}-object{ct}"] = dict(object_data)
                     ct += 1
 
-        resolved_game_objects: dict[str, dict[str, Any]] = {}
+        resolved_objects: dict[str, dict[str, Any]] = {}
 
-        def resolve_game_object(
+        def resolve_object(
             object_id: str, lineage: list[str] | None = None
         ) -> dict[str, Any]:
-            if object_id in resolved_game_objects:
-                return resolved_game_objects[object_id]
+            if object_id in resolved_objects:
+                return resolved_objects[object_id]
             if lineage is None:
                 lineage = []
             if object_id in lineage:
                 cycle = " -> ".join(lineage + [object_id])
                 sys.exit(f"Error: instance cycle detected: {cycle}")
-            if object_id not in raw_game_objects:
+            if object_id not in raw_objects:
                 sys.exit(f"Error: object '{object_id}' not found for inheritance.")
 
-            data = raw_game_objects[object_id]
+            data = raw_objects[object_id]
             instance_parent = data.get("instance")
             inherits_parent = data.get("inherits")
             template_parent = data.get("template")
@@ -129,7 +129,7 @@ class World:
                 )
             parent_id = parents[0] if parents else None
             if parent_id is not None:
-                parent = resolve_game_object(parent_id, lineage + [object_id])
+                parent = resolve_object(parent_id, lineage + [object_id])
                 merged: dict[str, Any] = dict(parent)
                 merged.update(data)
                 if parent.get("dialogue", None) == parent_id:
@@ -149,11 +149,11 @@ class World:
             data.setdefault("money", 0)
             data["id"] = object_id
 
-            resolved_game_objects[object_id] = data
+            resolved_objects[object_id] = data
             return data
 
-        for object_id in sorted(raw_game_objects):
-            resolve_game_object(object_id)
+        for object_id in sorted(raw_objects):
+            resolve_object(object_id)
 
         # Populate room object references from room definitions first.
         # If the world is still using the old object.location model, infer room
@@ -163,7 +163,7 @@ class World:
             for room_data in self.world_state["rooms"].values()
         )
         if not any_objects_defined:
-            for npc_id, meta in resolved_game_objects.items():
+            for npc_id, meta in resolved_objects.items():
                 location = meta.pop("location", None)
                 if location is None:
                     continue
@@ -213,7 +213,7 @@ class World:
         placed_objects: set[str] = set()
         for room_handle, room_data in self.world_state["rooms"].items():
             for obj_handle in room_data.get("objects", []):
-                if obj_handle not in resolved_game_objects:
+                if obj_handle not in resolved_objects:
                     sys.exit(
                         f"Error: room {room_data['name']} references unknown game object '{obj_handle}'."
                     )
@@ -225,7 +225,7 @@ class World:
                     if isinstance(exit_spec, dict) and "blocker" in exit_spec:
                         blocker_handle = exit_spec["blocker"]
                         if blocker_handle:
-                            if blocker_handle not in resolved_game_objects:
+                            if blocker_handle not in resolved_objects:
                                 sys.exit(
                                     f"Error: room {room_data.get('name', room_handle)} exit '{exit_name}' references unknown blocker '{blocker_handle}'."
                                 )
@@ -237,14 +237,14 @@ class World:
                             if isinstance(exit_spec, dict) and "blocker" in exit_spec:
                                 blocker_handle = exit_spec["blocker"]
                                 if blocker_handle:
-                                    if blocker_handle not in resolved_game_objects:
+                                    if blocker_handle not in resolved_objects:
                                         sys.exit(
                                             f"Error: room {room_data.get('name', room_handle)} exit '{exit_name}' references unknown blocker '{blocker_handle}'."
                                         )
                                     placed_objects.add(blocker_handle)
 
         for obj_handle in sorted(placed_objects):
-            self.world_state["game_objects"][obj_handle] = resolved_game_objects[
+            self.world_state["objects"][obj_handle] = resolved_objects[
                 obj_handle
             ]
 
@@ -271,7 +271,7 @@ class World:
         if not self.player_handle:
             raise ValueError(f"No player defined in {self.game_file}")
         self.game_settings = game_data.get("settings", {})
-        if self.player_handle not in self.world_state["game_objects"]:
+        if self.player_handle not in self.world_state["objects"]:
             sys.exit(
                 f"Error: player '{self.player_handle}' not placed in any room in world/rooms/."
             )
@@ -287,7 +287,7 @@ class World:
             )
 
         self.current_room = player_rooms[0]
-        self.world_state["player"] = self.world_state["game_objects"][
+        self.world_state["player"] = self.world_state["objects"][
             self.player_handle
         ]
 
@@ -349,7 +349,7 @@ class World:
         for npc_id in self.world_state["rooms"][self.current_room].get("objects", []):
             if npc_id == self.player_handle:
                 continue
-            npc_data = self.world_state["game_objects"].get(npc_id, {})
+            npc_data = self.world_state["objects"].get(npc_id, {})
             if npc_data.get("is_visible", True):
                 present.append(npc_id)
         return present
@@ -389,7 +389,7 @@ class World:
     def check_accost(self) -> str | None:
         """Return the first accosting NPC in this room, if any."""
         for npc_id in self.npcs_in_room():
-            if self.world_state["game_objects"][npc_id].get("accosts", False):
+            if self.world_state["objects"][npc_id].get("accosts", False):
                 return npc_id
         return None
 
@@ -447,7 +447,7 @@ class World:
                 target_room_name = self.world_state["items"][target].get("name")
 
         for npc_id in self.npcs_in_room():
-            npc_data = self.world_state["game_objects"].get(npc_id, {})
+            npc_data = self.world_state["objects"].get(npc_id, {})
             guards_raw = npc_data.get("guards_" + category)
             if guards_raw is None and category.endswith("s"):
                 guards_raw = npc_data.get("guards_" + category[:-1])

@@ -4,7 +4,7 @@ from runners.action import Action, InteractType, render_action
 from runners.world import World
 
 
-def test_render_action_uses_game_object_name_and_prompt() -> None:
+def test_render_action_uses_object_name_and_prompt() -> None:
     game_dir = Path(__file__).resolve().parents[1]
     world = World(game_dir)
     world.current_room = "cave"

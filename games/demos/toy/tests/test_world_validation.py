@@ -2,14 +2,14 @@ import textwrap
 from pathlib import Path
 
 from runners.world import World
-from validate.game_objects import validate_game_objects
+from validate.objects import validate_objects
 from validate.rooms import validate_world
 
 
 def test_validate_world_accepts_room_locations_and_exits(tmp_path: Path) -> None:
     world_dir = tmp_path / "world"
     (world_dir / "rooms").mkdir(parents=True)
-    (world_dir / "game_objects").mkdir(parents=True)
+    (world_dir / "objects").mkdir(parents=True)
 
     (world_dir / "game.yaml").write_text(
         textwrap.dedent(
@@ -20,7 +20,7 @@ def test_validate_world_accepts_room_locations_and_exits(tmp_path: Path) -> None
         + "\n",
         encoding="utf-8",
     )
-    (world_dir / "game_objects" / "hero.yaml").write_text(
+    (world_dir / "objects" / "hero.yaml").write_text(
         textwrap.dedent(
             """
             name: Hero
@@ -30,7 +30,7 @@ def test_validate_world_accepts_room_locations_and_exits(tmp_path: Path) -> None
         + "\n",
         encoding="utf-8",
     )
-    nested_dir = world_dir / "game_objects" / "nested"
+    nested_dir = world_dir / "objects" / "nested"
     nested_dir.mkdir(parents=True)
     (nested_dir / "npc.yaml").write_text(
         textwrap.dedent(
@@ -74,7 +74,7 @@ def test_validate_world_accepts_room_locations_and_exits(tmp_path: Path) -> None
 def test_validate_world_accepts_inline_objects(tmp_path: Path) -> None:
     world_dir = tmp_path / "world"
     (world_dir / "rooms").mkdir(parents=True)
-    (world_dir / "game_objects").mkdir(parents=True)
+    (world_dir / "objects").mkdir(parents=True)
     (world_dir / "items").mkdir(parents=True)
     (tmp_path / "dialogue").mkdir(parents=True)
 
@@ -87,7 +87,7 @@ def test_validate_world_accepts_inline_objects(tmp_path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    (world_dir / "game_objects" / "hero.yaml").write_text(
+    (world_dir / "objects" / "hero.yaml").write_text(
         textwrap.dedent(
             """
             name: Hero
@@ -98,7 +98,7 @@ def test_validate_world_accepts_inline_objects(tmp_path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    (world_dir / "game_objects" / "fridge.yaml").write_text(
+    (world_dir / "objects" / "fridge.yaml").write_text(
         textwrap.dedent(
             """
             name: Fridge
@@ -130,16 +130,16 @@ def test_validate_world_accepts_inline_objects(tmp_path: Path) -> None:
     validate_world(tmp_path)
 
     world = World(tmp_path)
-    assert world.world_state["game_objects"]["start-object0"]["name"] == "Fridge"
-    assert world.world_state["game_objects"]["start-object0"]["inventory"] == ["milk"]
+    assert world.world_state["objects"]["start-object0"]["name"] == "Fridge"
+    assert world.world_state["objects"]["start-object0"]["inventory"] == ["milk"]
     assert world.display_room()["npcs"] == ["start-object0"]
 
 
-def test_validate_game_objects_requires_metadata_and_dialogue(tmp_path: Path) -> None:
+def test_validate_objects_requires_metadata_and_dialogue(tmp_path: Path) -> None:
     world_dir = tmp_path / "world"
     (world_dir / "items").mkdir(parents=True)
     (world_dir / "rooms").mkdir(parents=True)
-    (world_dir / "game_objects").mkdir(parents=True)
+    (world_dir / "objects").mkdir(parents=True)
     (tmp_path / "dialogue").mkdir(parents=True)
 
     (world_dir / "game.yaml").write_text(
@@ -161,7 +161,7 @@ def test_validate_game_objects_requires_metadata_and_dialogue(tmp_path: Path) ->
         + "\n",
         encoding="utf-8",
     )
-    (world_dir / "game_objects" / "hero.yaml").write_text(
+    (world_dir / "objects" / "hero.yaml").write_text(
         textwrap.dedent(
             """
             name: Hero
@@ -187,4 +187,4 @@ def test_validate_game_objects_requires_metadata_and_dialogue(tmp_path: Path) ->
     )
     (tmp_path / "dialogue" / "hero.ink").write_text("Hello.\n")
 
-    validate_game_objects(tmp_path)
+    validate_objects(tmp_path)

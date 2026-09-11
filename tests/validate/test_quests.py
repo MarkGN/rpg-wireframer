@@ -24,8 +24,8 @@ def create_test_game(
     rooms_dir = world_dir / "rooms"
     rooms_dir.mkdir(exist_ok=True)
 
-    game_objects_dir = world_dir / "game_objects"
-    game_objects_dir.mkdir(exist_ok=True)
+    objects_dir = world_dir / "objects"
+    objects_dir.mkdir(exist_ok=True)
 
     quests_dir = world_dir / "quests"
     quests_dir.mkdir(exist_ok=True)
@@ -34,7 +34,7 @@ def create_test_game(
         yaml.dump({"player": player_handle}), encoding="utf-8"
     )
 
-    (game_objects_dir / f"{player_handle}.yaml").write_text(
+    (objects_dir / f"{player_handle}.yaml").write_text(
         yaml.dump({"name": "Player", "location": start_room}),
         encoding="utf-8",
     )
@@ -89,7 +89,7 @@ class TestRoomReachabilityValidator:
             {"start": {"exits": {}}},
             quests_config={"find_goal": {"name": "Find Goal"}},
         )
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
@@ -118,7 +118,7 @@ class TestRoomReachabilityValidator:
             {"start": {"exits": {}}},
             quests_config={"find_goal": {"name": "Find Goal"}},
         )
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
@@ -144,7 +144,7 @@ class TestRoomReachabilityValidator:
             {"start": {"exits": {}}},
             quests_config={"finish": {"name": "Finish"}},
         )
-        (game_dir / "world" / "game_objects" / "guard.yaml").write_text(
+        (game_dir / "world" / "objects" / "guard.yaml").write_text(
             yaml.dump(
                 {
                     "name": "Guard",
@@ -154,7 +154,7 @@ class TestRoomReachabilityValidator:
             ),
             encoding="utf-8",
         )
-        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
             yaml.dump(
                 {
                     "name": "Player",
@@ -183,7 +183,7 @@ class TestRoomReachabilityValidator:
         )
 
         assert validate_quests(game_dir) == ["finish"]
-        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
             yaml.dump(
                 {
                     "name": "Player",
@@ -204,7 +204,7 @@ class TestRoomReachabilityValidator:
             {"start": {"exits": {"East": "gate"}}, "gate": {"exits": {}}},
             quests_config={"pass_gate": {"name": "Pass Gate"}},
         )
-        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir = game_dir / "world" / "objects"
         objects_dir.joinpath("doorman.yaml").write_text(
             yaml.dump(
                 {
@@ -248,7 +248,7 @@ class TestRoomReachabilityValidator:
             {"start": {"exits": {"East": "gate"}}, "gate": {"exits": {}}},
             quests_config={"pass_gate": {"name": "Pass Gate"}},
         )
-        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir = game_dir / "world" / "objects"
         objects_dir.joinpath("doorman.yaml").write_text(
             yaml.dump(
                 {
@@ -294,7 +294,7 @@ class TestRoomReachabilityValidator:
             {"start": {"exits": {"East": "gate"}}, "gate": {"exits": {}}},
             quests_config={"pass_gate": {"name": "Pass Gate"}},
         )
-        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir = game_dir / "world" / "objects"
         objects_dir.joinpath("doorman.yaml").write_text(
             yaml.dump(
                 {
@@ -343,7 +343,7 @@ class TestRoomReachabilityValidator:
             },
             quests_config={"reach_destination": {"name": "Reach Destination"}},
         )
-        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir = game_dir / "world" / "objects"
         objects_dir.joinpath("guard.yaml").write_text(
             yaml.dump({"name": "Guard", "location": "start", "ink": "guard.ink"}),
             encoding="utf-8",
@@ -411,11 +411,11 @@ class TestRoomReachabilityValidator:
             },
             quests_config={"cross_water": {"name": "Cross Water"}},
         )
-        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
             yaml.dump({"name": "Player", "location": "start", "inventory": ["surf"]}),
             encoding="utf-8",
         )
-        objects_dir = game_dir / "world" / "game_objects"
+        objects_dir = game_dir / "world" / "objects"
         objects_dir.joinpath("obstacle.yaml").write_text(
             yaml.dump(
                 {"name": "Water", "location": "water", "accosts": True, "ink": "obstacle.ink"}
@@ -448,7 +448,7 @@ class TestRoomReachabilityValidator:
         )
 
         assert validate_quests(game_dir) == []
-        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
             yaml.dump({"name": "Player", "location": "start", "inventory": []}),
             encoding="utf-8",
         )
@@ -492,7 +492,7 @@ class TestRoomReachabilityValidator:
     def test_get_guard_truthy_reachable(self, tmp_path: Path, capsys) -> None:
         """Test truthy get() guard whose target knot is reachable."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink", "met": True}),
             encoding="utf-8",
         )
@@ -512,7 +512,7 @@ class TestRoomReachabilityValidator:
     def test_get_guard_falsy_unreachable(self, tmp_path: Path, capsys) -> None:
         """Test falsy get() guard whose target knot is unreachable."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink", "met": False}),
             encoding="utf-8",
         )
@@ -532,7 +532,7 @@ class TestRoomReachabilityValidator:
     def test_not_get_guard_opposite_behavior(self, tmp_path: Path, capsys) -> None:
         """Test not get() guard with opposite behavior."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink", "met": False}),
             encoding="utf-8",
         )
@@ -552,7 +552,7 @@ class TestRoomReachabilityValidator:
     def test_self_resolution_against_world_state(self, tmp_path: Path, capsys) -> None:
         """Test $self resolution against a game object's world state."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "bob.yaml").write_text(
+        (game_dir / "world" / "objects" / "bob.yaml").write_text(
             yaml.dump({"name": "Bob", "location": "start", "ink": "bob.ink", "friend": True}),
             encoding="utf-8",
         )
@@ -572,7 +572,7 @@ class TestRoomReachabilityValidator:
     def test_set_mutation_same_dialogue(self, tmp_path: Path, capsys) -> None:
         """Test that set() in a knot mutates state and enables a subsequent get() guard."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink", "met": False}),
             encoding="utf-8",
         )
@@ -598,11 +598,11 @@ class TestRoomReachabilityValidator:
                 "garden": {"exits": {"West": "start"}},
             },
         )
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
-        (game_dir / "world" / "game_objects" / "bob.yaml").write_text(
+        (game_dir / "world" / "objects" / "bob.yaml").write_text(
             yaml.dump({"name": "Bob", "location": "garden", "ink": "bob.ink"}),
             encoding="utf-8",
         )
@@ -632,11 +632,11 @@ class TestRoomReachabilityValidator:
                 "garden": {"exits": {"West": "start"}},
             },
         )
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
-        (game_dir / "world" / "game_objects" / "bob.yaml").write_text(
+        (game_dir / "world" / "objects" / "bob.yaml").write_text(
             yaml.dump({"name": "Bob", "location": "garden", "ink": "bob.ink"}),
             encoding="utf-8",
         )
@@ -660,7 +660,7 @@ class TestRoomReachabilityValidator:
     def test_has_add_same_dialogue(self, tmp_path: Path, capsys) -> None:
         """Test that add() adds an item to inventory and enables a subsequent has() guard."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
@@ -680,11 +680,11 @@ class TestRoomReachabilityValidator:
     def test_has_remove_same_dialogue(self, tmp_path: Path, capsys) -> None:
         """Test that remove() removes an item from inventory and satisfies a not has() guard."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "hero.yaml").write_text(
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
             yaml.dump({"name": "Player", "location": "start", "inventory": ["key"]}),
             encoding="utf-8",
         )
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
@@ -710,11 +710,11 @@ class TestRoomReachabilityValidator:
                 "garden": {"exits": {"West": "start"}},
             },
         )
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
-        (game_dir / "world" / "game_objects" / "bob.yaml").write_text(
+        (game_dir / "world" / "objects" / "bob.yaml").write_text(
             yaml.dump({"name": "Bob", "location": "garden", "ink": "bob.ink"}),
             encoding="utf-8",
         )
@@ -738,7 +738,7 @@ class TestRoomReachabilityValidator:
     def test_has_unreachable_without_add(self, tmp_path: Path, capsys) -> None:
         """Test that a knot requiring an item that is never added is detected as unreachable."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
@@ -758,7 +758,7 @@ class TestRoomReachabilityValidator:
     def test_has_missing_item_blocks_fallthrough_knot(self, tmp_path: Path, capsys) -> None:
         """Test that a false conditional divert blocks its fall-through knot."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
@@ -785,7 +785,7 @@ class TestRoomReachabilityValidator:
     def test_has_missing_item_blocks_inline_dialogue(self, tmp_path: Path, capsys) -> None:
         """Test that a false conditional divert blocks following inline dialogue."""
         game_dir = create_test_game(tmp_path, {"start": {"exits": {}}})
-        (game_dir / "world" / "game_objects" / "alice.yaml").write_text(
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
             yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
             encoding="utf-8",
         )
@@ -824,7 +824,7 @@ class TestRoomReachabilityValidator:
         cellar_data["items"] = ["key"]
         cellar_yaml.write_text(yaml.dump(cellar_data), encoding="utf-8")
 
-        (game_dir / "world" / "game_objects" / "gatekeeper.yaml").write_text(
+        (game_dir / "world" / "objects" / "gatekeeper.yaml").write_text(
             yaml.dump({"name": "Gatekeeper", "location": "start", "ink": "gatekeeper.ink"}),
             encoding="utf-8",
         )
@@ -855,7 +855,7 @@ class TestRoomReachabilityValidator:
         cave_data["items"] = ["ruby"]
         cave_yaml.write_text(yaml.dump(cave_data), encoding="utf-8")
 
-        (game_dir / "world" / "game_objects" / "wizard.yaml").write_text(
+        (game_dir / "world" / "objects" / "wizard.yaml").write_text(
             yaml.dump({"name": "Wizard", "location": "start", "ink": "wizard.ink"}),
             encoding="utf-8",
         )

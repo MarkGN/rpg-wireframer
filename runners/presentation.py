@@ -20,7 +20,7 @@ def format_explore_header(world: World, context: Explore) -> list[str]:
 
 def format_dialogue_header(world: World, context: Dialogue) -> list[str]:
     name = (
-        world.world_state["game_objects"]
+        world.world_state["objects"]
         .get(context.current_speaker, {})
         .get("name", None)
     )
@@ -69,7 +69,7 @@ def format_quest_log(world: World) -> list[str]:
 
 
 def format_inventory(world: World) -> list[str]:
-    player = world.world_state["game_objects"][world.player_handle]
+    player = world.world_state["objects"][world.player_handle]
     lines = [f"${player['money']}"]
     lines.extend(player.get("inventory", []))
     return lines

@@ -34,4 +34,4 @@ The text runner is a presentation layer the player can use to run an interactive
 
 ## World
 
-Much of the game's state is stored in `world.world_state`. Within this, `game_objects` includes NPCs along with things like chests; `global` contains global variables (not often super useful because most variables naturally are attached to some game object, but there are counterexamples); `items` describes items (if you're very lazy, you can create items that aren't defined here, but they'll only have a name, no other data, and it's probably not future-compatible); `rooms` includes rooms; `quests` includes quests.
+Much of the game's state is stored in `world.world_state`. Within this, `objects` includes NPCs along with things like chests; `global` contains global variables (not often super useful because most variables naturally are attached to some game object, but there are counterexamples); `items` describes items (if you're very lazy, you can create items that aren't defined here, but they'll only have a name, no other data, and it's probably not future-compatible); `rooms` includes rooms; `quests` includes quests.

@@ -40,7 +40,7 @@ To test:
 │   │       ├── dialogue
 │   │       ├── tests
 │   │       └── world
-│   │           ├── game_objects
+│   │           ├── objects
 │   │           ├── game.yaml
 │   │           ├── items
 │   │           ├── quests
@@ -70,7 +70,7 @@ To test:
 
 world/
   items/        // .yaml files
-  game_objects/ // .yaml files
+  objects/ // .yaml files
   quests/        // .yaml files
   rooms/        // .yaml files
   scenarios/        // .yaml files

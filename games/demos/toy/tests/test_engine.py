@@ -94,8 +94,8 @@ def test_beat_bob():
     ]
     for verb, target in actions:
         world.handle_action(verb, target)
-    assert world.world_state["game_objects"]["bob"]["money"] == 0
-    assert world.world_state["game_objects"]["zorro"]["money"] == 10
+    assert world.world_state["objects"]["bob"]["money"] == 0
+    assert world.world_state["objects"]["zorro"]["money"] == 10
 
 
 def test_quests_load():
@@ -112,7 +112,7 @@ def test_alice_flower_quest_triggers():
     world = World(Path(f"{game_dir}"))
 
     world.set_state("quests.alice_flower.stage", 10)
-    world.world_state["game_objects"]["bob"]["accosts"] = False
+    world.world_state["objects"]["bob"]["accosts"] = False
     world.handle_action("g", "Gate")
     assert world.current_room == "field"
     assert world.world_state["quests"]["alice_flower"]["stage"] == 20
@@ -225,7 +225,7 @@ def test_check_block_file_pointer():
     world = World(Path(f"{game_dir}"))
     world.load_world()
 
-    world.world_state["game_objects"]["guard"] = {
+    world.world_state["objects"]["guard"] = {
         "name": "Guard",
         "guards_exit": ["house"],
     }
@@ -260,7 +260,7 @@ def test_dialogue_bad_external_call_returns_line_number():
     )
 
     try:
-        world.world_state["game_objects"]["test_npc"] = {
+        world.world_state["objects"]["test_npc"] = {
             "name": "Test NPC",
             "ink": "bad_call_test",
         }

@@ -1,5 +1,5 @@
 name: Vermilion City
-description: A much nicer city, notwithstanding the gang presence.
+description: A city built on a large lake.
 exits:
   Pokecenter: vermilion_poke
   Shop: vermilion_shop
