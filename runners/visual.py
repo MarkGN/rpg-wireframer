@@ -189,7 +189,7 @@ class VisualRunner:
         self.draw_text("You are in an encounter!", (28, 35), self.title_font)
 
     def draw_room(self) -> None:
-        room_path = self.game_dir / "assets" / "maps" / "current_room.png"
+        room_path = self.game_dir / "assets" / "maps" / (self.world.current_room + ".png")
         self.draw_asset(room_path, pygame.Rect(0, 0, WIDTH, IMAGE_HEIGHT))
         room = self.world.display_room()
         self.screen.fill((0, 0, 0, 120), (0, IMAGE_HEIGHT - 58, WIDTH, 58))
