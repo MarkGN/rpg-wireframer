@@ -34,12 +34,15 @@ class Explore(Context):
             # go to location
             exits = world.world_state["rooms"][world.current_room].get("exits", {})
             if target in exits:
-                exit_data = exits[target]
-                destination = (
-                    exit_data.get("room", target)
-                    if isinstance(exit_data, dict)
-                    else exit_data
-                )
+                if isinstance(exits, dict):
+                    exit_data = exits[target]
+                    destination = (
+                        exit_data.get("room", target)
+                        if isinstance(exit_data, dict)
+                        else exit_data
+                    )
+                elif isinstance(exits, list):
+                    destination = target
                 blocking = world.check_block("exits", target)
                 if blocking:
                     world.push_context("dialogue", npc=blocking, target_room=destination)
