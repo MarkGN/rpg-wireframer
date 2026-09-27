@@ -293,3 +293,135 @@ def test_dialogue_malformed_ink_returns_line_number():
         bad_ink_file.unlink(missing_ok=True)
         json_file = dialogue_dir / "malformed_test.ink.json"
         json_file.unlink(missing_ok=True)
+
+
+def test_dialogue_handoff():
+    game_dir = get_game_dir()
+    world = World(Path(f"{game_dir}"))
+    world.load_world()
+
+    dialogue_dir = Path(game_dir) / "dialogue"
+    alice_ink = dialogue_dir / "handoff_alice_test.ink"
+    bob_ink = dialogue_dir / "handoff_bob_test.ink"
+
+    alice_ink.write_text("Hello ...\n~ handoff(\"bob_npc\", \"\")\nJingo.\n-> END\n", encoding="utf-8")
+    bob_ink.write_text("World!\n-> END\n", encoding="utf-8")
+
+    try:
+        world.world_state["objects"]["alice_npc"] = {
+            "name": "Alice",
+            "ink": "handoff_alice_test",
+        }
+        world.world_state["objects"]["bob_npc"] = {
+            "name": "Bob",
+            "ink": "handoff_bob_test",
+        }
+
+        world.push_context("dialogue", npc="alice_npc")
+        context = world.get_context()
+        assert context.current_speaker == "alice_npc"
+        assert context.last_text == "Hello ..."
+
+        actions = context.actions(world)
+        assert len(actions) == 1
+        assert actions[0].interact_type == "cont_talk"
+        assert actions[0].target == "-continue-"
+
+        # Continue talking - triggers handoff to Bob before reading later Alice text
+        world.handle_action("c", "-continue-")
+
+        new_context = world.get_context()
+        assert new_context.npc == "bob_npc"
+        assert new_context.current_speaker == "bob_npc"
+        assert new_context.last_text == "World!"
+
+        actions = new_context.actions(world)
+        assert len(actions) == 1
+        assert actions[0].interact_type == "end_dialogue"
+
+        # End Bob's dialogue
+        world.handle_action("c", "end dialogue")
+        assert world.get_context().__class__.__name__ == "Explore"
+    finally:
+        alice_ink.unlink(missing_ok=True)
+        bob_ink.unlink(missing_ok=True)
+        (dialogue_dir / "handoff_alice_test.ink.json").unlink(missing_ok=True)
+        (dialogue_dir / "handoff_bob_test.ink.json").unlink(missing_ok=True)
+
+
+def test_dialogue_handoff_with_knot():
+    game_dir = get_game_dir()
+    world = World(Path(f"{game_dir}"))
+    world.load_world()
+
+    dialogue_dir = Path(game_dir) / "dialogue"
+    alice_ink = dialogue_dir / "handoff_knot_alice.ink"
+    bob_ink = dialogue_dir / "handoff_knot_bob.ink"
+
+    alice_ink.write_text("Starting handoff...\n~ handoff(\"bob_npc\", \"target_knot\")\n-> END\n", encoding="utf-8")
+    bob_ink.write_text("Default knot!\n-> END\n=== target_knot ===\nTarget knot reached!\n-> END\n", encoding="utf-8")
+
+    try:
+        world.world_state["objects"]["alice_npc"] = {
+            "name": "Alice",
+            "ink": "handoff_knot_alice",
+        }
+        world.world_state["objects"]["bob_npc"] = {
+            "name": "Bob",
+            "ink": "handoff_knot_bob",
+        }
+
+        world.push_context("dialogue", npc="alice_npc")
+        context = world.get_context()
+        assert context.last_text == "Starting handoff..."
+
+        world.handle_action("c", "-continue-")
+
+        new_context = world.get_context()
+        assert new_context.npc == "bob_npc"
+        assert new_context.last_text == "Target knot reached!"
+
+        world.handle_action("c", "end dialogue")
+        assert world.get_context().__class__.__name__ == "Explore"
+    finally:
+        alice_ink.unlink(missing_ok=True)
+        bob_ink.unlink(missing_ok=True)
+        (dialogue_dir / "handoff_knot_alice.ink.json").unlink(missing_ok=True)
+        (dialogue_dir / "handoff_knot_bob.ink.json").unlink(missing_ok=True)
+
+
+def test_dialogue_handoff_immediate_no_text():
+    game_dir = get_game_dir()
+    world = World(Path(f"{game_dir}"))
+    world.load_world()
+
+    dialogue_dir = Path(game_dir) / "dialogue"
+    alice_ink = dialogue_dir / "handoff_imm_alice.ink"
+    bob_ink = dialogue_dir / "handoff_imm_bob.ink"
+
+    alice_ink.write_text("~ handoff(\"bob_npc\", \"\")\n-> END\n", encoding="utf-8")
+    bob_ink.write_text("Instant World!\n-> END\n", encoding="utf-8")
+
+    try:
+        world.world_state["objects"]["alice_npc"] = {
+            "name": "Alice",
+            "ink": "handoff_imm_alice",
+        }
+        world.world_state["objects"]["bob_npc"] = {
+            "name": "Bob",
+            "ink": "handoff_imm_bob",
+        }
+
+        world.push_context("dialogue", npc="alice_npc")
+        # Should immediately be in Bob's dialogue with Bob's text
+        context = world.get_context()
+        assert context.npc == "bob_npc"
+        assert context.last_text == "Instant World!"
+
+        world.handle_action("c", "end dialogue")
+        assert world.get_context().__class__.__name__ == "Explore"
+    finally:
+        alice_ink.unlink(missing_ok=True)
+        bob_ink.unlink(missing_ok=True)
+        (dialogue_dir / "handoff_imm_alice.ink.json").unlink(missing_ok=True)
+        (dialogue_dir / "handoff_imm_bob.ink.json").unlink(missing_ok=True)

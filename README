@@ -93,6 +93,10 @@ runners/
 tests/
   validate/     // tests confirming validators achieve expected results for given world states
 
+# Useful commands
+
+neato -Tpng games/local/{mygame}/rooms.dot -o map.png -- after `make export-dot GAME=games/local/{mygame}`: this converts the DOT file to a PNG map.
+
 # GameObjects
 
 These should be YAML files. They often are NPCs, but can equally be treasure chests, puzzles, or vehicles. Their defining feature is to be interactive with some dialogue or other script. The following are keywords:

@@ -37,8 +37,10 @@ class Dialogue(Context):
         self.buffered_speaker: str | None = None
         self.external_texts: list[str] = []
         self.pending_scenario: str | None = None
+        self.pending_handoff: tuple[str, str | None] | None = None
         self._pending_choice_text: str | None = None
         self._target_room: str | None = kwargs.get("target_room")
+        self._start_knot: str | None = kwargs.get("start_knot") or kwargs.get("knot")
         self.world: World | None = None
 
     def on_enter(self, world: World) -> None:
@@ -54,6 +56,7 @@ class Dialogue(Context):
             set(key, value)
             move(npc, location)
             shop(inventory)
+            handoff(target, knot)
         """
         self.world = world
         meta = world.world_state["objects"].get(self.npc, {})
@@ -70,12 +73,17 @@ class Dialogue(Context):
         self.story = Story(story_data)
 
         def binder(key):
+            npc_room = ""
+            try:
+                npc_room = world.find_npc(self.npc)
+            except SystemExit:
+                pass
             return Binder(
                 {
                     "player": world.player_handle,
                     "self": self.npc,
                     "current_room": world.current_room,
-                    "npc_room": world.find_npc(self.npc)
+                    "npc_room": npc_room,
                 }
             ).apply(key)
 
@@ -157,6 +165,11 @@ class Dialogue(Context):
         def ext_speaker(npc: str) -> None:
             self.current_speaker = world.get_state(binder(npc)+".name")
 
+        def ext_handoff(target_npc: str, knot: str = "") -> None:
+            clean_npc = binder(target_npc).removeprefix("objects.")
+            clean_knot = knot.strip() if isinstance(knot, str) and knot.strip() else None
+            self.pending_handoff = (clean_npc, clean_knot)
+
         self.story.BindExternalFunction("get", ext_get)
         self.story.BindExternalFunction("set", ext_set)
         self.story.BindExternalFunction("increase", ext_increase)
@@ -171,6 +184,7 @@ class Dialogue(Context):
         self.story.BindExternalFunction("parse_inventory", ext_parse_inventory)
         self.story.BindExternalFunction("speaker", ext_speaker)
         self.story.BindExternalFunction("pass", ext_pass)
+        self.story.BindExternalFunction("handoff", ext_handoff)
 
         custom_externals = load_custom_externals_definitions(dialogue_dir)
         for name, arg_count in custom_externals.items():
@@ -179,8 +193,13 @@ class Dialogue(Context):
                 make_custom_external_function(name, arg_count, self),
             )
 
+        if self._start_knot:
+            self.story.ChoosePathString(self._start_knot)
+
         self.step_story()
-        if self.pending_scenario is not None and not self.last_text:
+        if self.pending_handoff is not None and not self.last_text:
+            self._execute_pending_handoff(world)
+        elif self.pending_scenario is not None and not self.last_text:
             self._execute_pending_scenario(world)
 
     def step_story(self):
@@ -204,6 +223,8 @@ class Dialogue(Context):
                     if self._pending_choice_text is not None and text == self._pending_choice_text:
                         self._pending_choice_text = None
                         continue
+                    if self.pending_scenario is not None or self.pending_handoff is not None:
+                        break
                     if text:
                         if self.current_speaker != old_speaker:
                             if parts:
@@ -215,8 +236,8 @@ class Dialogue(Context):
                                 parts.append(text)
                         else:
                             parts.append(text)
-                    if self.pending_scenario is not None:
-                        break
+                if self.pending_scenario is not None or self.pending_handoff is not None:
+                    break
                 if self.external_texts and not self.story.canContinue:
                     parts.extend(self.external_texts)
                     self.external_texts = []
@@ -230,6 +251,7 @@ class Dialogue(Context):
             self.story.canContinue
             or self.buffered_text is not None
             or self.pending_scenario is not None
+            or self.pending_handoff is not None
         ):
             return [Action(InteractType.CONTINUE_TALK, "-continue-")]
         elif self.story.currentChoices:
@@ -246,12 +268,16 @@ class Dialogue(Context):
         self.last_text = ""
         if verb == InteractType.END_DIALOGUE:
             world.pop_context()
+        elif self.buffered_text is not None:
+            self.step_story()
+        elif self.pending_handoff is not None:
+            self._execute_pending_handoff(world)
         elif self.pending_scenario is not None and not (
             self.buffered_text is not None
             or self.story.canContinue
         ):
             self._execute_pending_scenario(world)
-        elif self.buffered_text is not None or self.story.canContinue:
+        elif self.story.canContinue:
             self.step_story()
         elif self.story.currentChoices:
             self._pending_choice_text = target
@@ -260,6 +286,15 @@ class Dialogue(Context):
             self.step_story()
         else:
             world.pop_context()
+
+    def _execute_pending_handoff(self, world: World) -> None:
+        if self.pending_handoff is None:
+            return
+        target_npc, knot = self.pending_handoff
+        self.pending_handoff = None
+        target_room = self._target_room
+        world.pop_context()
+        world.push_context("dialogue", npc=target_npc, start_knot=knot, target_room=target_room)
 
     def _execute_pending_scenario(self, world: World) -> None:
         script = self.pending_scenario
