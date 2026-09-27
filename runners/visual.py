@@ -13,6 +13,7 @@ from .context_independent_actions import (
     get_context_independent_actions,
     handle_context_independent_action,
 )
+from .contexts.craft import Craft
 from .contexts.dialogue import Dialogue
 from .contexts.encounter import Encounter
 from .contexts.explore import Explore
@@ -130,6 +131,8 @@ class VisualRunner:
             self.draw_dialogue(context)
         elif isinstance(context, Shop):
             self.draw_shop(context)
+        elif isinstance(context, Craft):
+            self.draw_craft(context)
         elif isinstance(context, Encounter):
             self.draw_encounter()
         self.draw_actions()
@@ -183,6 +186,21 @@ class VisualRunner:
             self.draw_text(
                 f"{item.get('name', item_id)}  {item.get('price', '?')}",
                 (220, 150 + index * 32),
+                self.font,
+            )
+
+    def draw_craft(self, context: Craft) -> None:
+        self.screen.fill(PANEL, (0, 0, WIDTH, IMAGE_HEIGHT))
+        self.draw_text("Crafting", (28, 35), self.title_font)
+        self.draw_wrapped(context.line, pygame.Rect(28, 80, WIDTH - 56, 80))
+        for index, recipe in enumerate(context.recipes):
+            if not context._recipe_is_craftable(recipe, self.world):
+                continue
+            inputs = ", ".join(recipe.get("input", []))
+            outputs = ", ".join(recipe.get("output", []))
+            self.draw_text(
+                f"{index}: {inputs} -> {outputs}",
+                (28, 170 + index * 30),
                 self.font,
             )
 

@@ -10,6 +10,7 @@ class InteractType(str, Enum):
     CONTINUE_TALK = "cont_talk"
     TAKE = "take"
     BUY = "buy"
+    CRAFT = "craft"
     QUIT = "quit"
     FIGHT = "fight"
     END_DIALOGUE = "end_dialogue"
@@ -59,6 +60,9 @@ def render_action(world: Any, action: Action) -> str:
 
     if interact_type == InteractType.BUY:
         return f"Buy {target}"
+
+    if interact_type == InteractType.CRAFT:
+        return f"Craft {target}"
 
     if interact_type == InteractType.QUIT:
         return "Quit"

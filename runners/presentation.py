@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .contexts.craft import Craft
     from .contexts.dialogue import Dialogue
     from .contexts.explore import Explore
     from .contexts.shop import Shop
@@ -42,6 +43,16 @@ def format_shop_header(world: World, context: Shop) -> list[str]:
         lines.append(
             f"{world.world_state['items'][item]['name']} {world.world_state['items'][item]['price']}"
         )
+    return lines
+
+
+def format_craft_header(world: World, context: Craft) -> list[str]:
+    lines = [context.line]
+    for index, recipe in enumerate(context.recipes):
+        inputs = ", ".join(recipe.get("input", []))
+        outputs = ", ".join(recipe.get("output", []))
+        if inputs and outputs:
+            lines.append(f"{index}: {inputs} -> {outputs}")
     return lines
 
 

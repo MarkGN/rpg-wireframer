@@ -537,6 +537,9 @@ def validate_quests(
         action_timer.__exit__(None, None, None)
 
     # Add room transitions (move actions)
+    # Note: crafting is modelled in the text runner, but the validator intentionally
+    # does not remove inputs or add outputs here: it focuses on quest reachability
+    # rather than simulating the player economy or item transformations.
     if profiler:
         action_timer = profiler.time_actions("Explore Context")
         action_timer.__enter__()

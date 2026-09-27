@@ -5,6 +5,7 @@ from .context_independent_actions import (
     get_context_independent_actions,
     handle_context_independent_action,
 )
+from .contexts.craft import Craft
 from .contexts.dialogue import Dialogue
 from .contexts.encounter import Encounter
 from .contexts.explore import Explore
@@ -12,6 +13,7 @@ from .contexts.shop import Shop
 from .presentation import (
     format_actions,
     format_context_independent_actions,
+    format_craft_header,
     format_dialogue_header,
     format_encounter_header,
     format_explore_header,
@@ -43,6 +45,9 @@ def main() -> None:
                 print(line)
         elif isinstance(context, Shop):
             for line in format_shop_header(world, context):
+                print(line)
+        elif isinstance(context, Craft):
+            for line in format_craft_header(world, context):
                 print(line)
         print("#" * 30)
         # get and print actions from world
