@@ -796,46 +796,63 @@ def validate_quests(
             names=_planner_names(), problem_kind=problem.kind
         ) as planner:
             profiler.planner_name = planner.name
-            for quest_id in quest_ids:
-                if not quest_set_candidates.get(quest_id):
-                    continue
-                checked_quests.add(quest_id)
-                problem.clear_goals()
-                problem.add_goal(quest_completed[quest_id])
-                if profiler.expired():
-                    break
-                profiler.solver_calls += 1
-                solve_started = monotonic()
-                try:
-                    with _hard_timeout(profiler.remaining()):
-                        res = planner.solve(problem)
-                except TimeoutError:
-                    profiler.stopped = True
-                    profiler.stop_reason = "planner solve timed out"
+            remaining_quests = [quest_id for quest_id in quest_ids if quest_set_candidates.get(quest_id)]
+            while remaining_quests:
+                progress_made = False
+                for quest_id in list(remaining_quests):
+                    if not quest_set_candidates.get(quest_id):
+                        continue
+                    checked_quests.add(quest_id)
+                    problem.clear_goals()
+                    problem.add_goal(quest_completed[quest_id])
+                    if profiler.expired():
+                        break
+                    profiler.solver_calls += 1
+                    solve_started = monotonic()
+                    try:
+                        with _hard_timeout(profiler.remaining()):
+                            res = planner.solve(problem)
+                    except TimeoutError:
+                        profiler.stopped = True
+                        profiler.stop_reason = "planner solve timed out"
+                        solve_seconds = monotonic() - solve_started
+                        profiler.solver_seconds += solve_seconds
+                        profiler.solver_records.append(
+                            {
+                                "goal": f"quest:{quest_id}",
+                                "seconds": solve_seconds,
+                                "status": "TIMEOUT",
+                            }
+                        )
+                        break
                     solve_seconds = monotonic() - solve_started
                     profiler.solver_seconds += solve_seconds
                     profiler.solver_records.append(
                         {
                             "goal": f"quest:{quest_id}",
                             "seconds": solve_seconds,
-                            "status": "TIMEOUT",
+                            "status": res.status.name,
                         }
                     )
+                    save_satisficing_plan(quest_id, res, planner.name)
+                    if res.status.name in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
+                        progress_made = True
+                        remaining_quests.remove(quest_id)
+                        completion_var = quest_targets[quest_id]
+                        if completion_var in var_fluents_true:
+                            problem.set_initial_value(
+                                var_fluents_true[completion_var], True
+                            )
+                            problem.set_initial_value(
+                                var_fluents_false[completion_var], False
+                            )
+                    if profiler.expired():
+                        break
+                if not progress_made or profiler.expired():
                     break
-                solve_seconds = monotonic() - solve_started
-                profiler.solver_seconds += solve_seconds
-                profiler.solver_records.append(
-                    {
-                        "goal": f"quest:{quest_id}",
-                        "seconds": solve_seconds,
-                        "status": res.status.name,
-                    }
-                )
-                save_satisficing_plan(quest_id, res, planner.name)
-                if res.status.name not in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
-                    incomplete_quests.append(quest_id)
-                if profiler.expired():
-                    break
+            incomplete_quests.extend(
+                quest_id for quest_id in remaining_quests if quest_set_candidates.get(quest_id)
+            )
             if profiler.stopped:
                 incomplete_quests.extend(
                     quest_id
@@ -845,18 +862,36 @@ def validate_quests(
                 )
         # The timeout path above intentionally stops checking later quests.
     else:
+        remaining_quests = [quest_id for quest_id in quest_ids if quest_set_candidates.get(quest_id)]
         with up.OneshotPlanner(
             names=_planner_names(), problem_kind=problem.kind
         ) as planner:
-            for quest_id in quest_ids:
-                if not quest_set_candidates.get(quest_id):
-                    continue
-                problem.clear_goals()
-                problem.add_goal(quest_completed[quest_id])
-                res = planner.solve(problem)
-                save_satisficing_plan(quest_id, res, planner.name)
-                if res.status.name not in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
-                    incomplete_quests.append(quest_id)
+            while remaining_quests:
+                progress_made = False
+                for quest_id in list(remaining_quests):
+                    if not quest_set_candidates.get(quest_id):
+                        continue
+                    problem.clear_goals()
+                    problem.add_goal(quest_completed[quest_id])
+                    res = planner.solve(problem)
+                    save_satisficing_plan(quest_id, res, planner.name)
+                    if res.status.name in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
+                        progress_made = True
+                        remaining_quests.remove(quest_id)
+                        completion_var = quest_targets[quest_id]
+                        if completion_var in var_fluents_true:
+                            problem.set_initial_value(
+                                var_fluents_true[completion_var], True
+                            )
+                            problem.set_initial_value(
+                                var_fluents_false[completion_var], False
+                            )
+                    
+                if not progress_made:
+                    break
+        incomplete_quests.extend(
+            quest_id for quest_id in remaining_quests if quest_set_candidates.get(quest_id)
+        )
 
     if incomplete_quests:
         print(f"Warning: quests not completable: {', '.join(sorted(set(incomplete_quests)))}")
