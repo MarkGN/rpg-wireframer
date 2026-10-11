@@ -4,6 +4,7 @@ from pathlib import Path
 
 import yaml
 
+from validate.ink_analyser import analyze_ink_file
 from validate.quests import QuestValidator, validate_quests, validate_world
 
 
@@ -44,6 +45,8 @@ def create_test_game(
             "name": room_id.replace("_", " ").title(),
             "exits": config.get("exits", {}),
         }
+        if "objects" in config:
+            room_data["objects"] = config["objects"]
         (rooms_dir / f"{room_id}.yaml").write_text(
             yaml.dump(room_data),
             encoding="utf-8",
@@ -135,6 +138,204 @@ class TestRoomReachabilityValidator:
 
         assert validate_quests(game_dir) == ["find_goal"]
 
+    def test_add_mutation_resolves_bound_get_argument(
+        self, tmp_path: Path
+    ) -> None:
+        """A get() argument to add() should use the calling object's bound state."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"objects": ["hero", "alice"]}},
+            quests_config={"find_book": {"name": "Find Book"}},
+        )
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Alice",
+                    "location": "start",
+                    "item": "book",
+                    "ink": "alice.ink",
+                }
+            ),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL get(key)\n"
+            "EXTERNAL add(target, item)\n"
+            "EXTERNAL has(target, item)\n"
+            "EXTERNAL set(key, value)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n"
+            '~ add("$player.inventory", get("$self.item"))\n'
+            '{ has("$player.inventory", "book"): -> complete}\n'
+            "-> END\n"
+            "=== complete ===\n"
+            '~ set("quests.find_book.completed", 1)\n'
+            "-> END\n",
+            encoding="utf-8",
+        )
+
+        alice_path = game_dir / "world" / "objects" / "alice.yaml"
+        alice_data = yaml.safe_load(alice_path.read_text(encoding="utf-8"))
+        alice_data["item"] = "not_a_book"
+        alice_path.write_text(yaml.dump(alice_data), encoding="utf-8")
+        assert validate_quests(game_dir) == ["find_book"]
+
+        alice_data["item"] = "book"
+        alice_path.write_text(yaml.dump(alice_data), encoding="utf-8")
+        assert validate_quests(game_dir) == []
+
+    def test_or_guard_requires_either_inventory_item(
+        self, tmp_path: Path
+    ) -> None:
+        """An Ink OR guard should not require all alternatives at once."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"objects": ["hero", "alice"]}},
+            quests_config={"finish": {"name": "Finish"}},
+        )
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Player",
+                    "location": "start",
+                    "inventory": ["first_item"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL has(target, item)\nEXTERNAL set(key, value)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n"
+            '{has("$player.inventory", "first_item") || '
+            'has("$player.inventory", "second_item"): -> complete}\n'
+            "-> END\n"
+            "=== complete ===\n"
+            '~ set("quests.finish.completed", 1)\n'
+            "-> END\n",
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+
+        hero_path = game_dir / "world" / "objects" / "hero.yaml"
+        hero_data = yaml.safe_load(hero_path.read_text(encoding="utf-8"))
+        hero_data["inventory"] = []
+        hero_path.write_text(yaml.dump(hero_data), encoding="utf-8")
+        assert validate_quests(game_dir) == ["finish"]
+
+    def test_discrete_value_guard_matches_current_value(
+        self, tmp_path: Path
+    ) -> None:
+        """A get() equality guard should match its exact finite state value."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"objects": ["hero", "alice"]}},
+            quests_config={"finish": {"name": "Finish"}},
+        )
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Alice",
+                    "location": "start",
+                    "stage": 0,
+                    "ink": "alice.ink",
+                }
+            ),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL get(key)\nEXTERNAL set(key, value)\n",
+            encoding="utf-8",
+        )
+
+        def write_dialogue(value: int) -> None:
+            (dialogue_dir / "alice.ink").write_text(
+                "-> root\n=== root ===\n"
+                f'~ set("$self.stage", {value})\n'
+                '{ get("$self.stage") == 10: -> stage_10}\n'
+                '{ get("$self.stage") == 20: -> stage_20}\n'
+                "-> END\n"
+                "=== stage_10 ===\n"
+                "-> END\n"
+                "=== stage_20 ===\n"
+                '~ set("quests.finish.completed", 1)\n'
+                "-> END\n",
+                encoding="utf-8",
+            )
+
+        write_dialogue(10)
+        assert validate_quests(game_dir) == ["finish"]
+
+        write_dialogue(20)
+        assert validate_quests(game_dir) == []
+
+    def test_choice_mutations_wait_for_guard_and_selection(
+        self, tmp_path: Path
+    ) -> None:
+        """Choice effects require both reaching the choice and selecting it."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"objects": ["hero", "cat", "harry"]}},
+            quests_config={"find_cat": {"name": "Find Cat"}},
+        )
+        (game_dir / "world" / "objects" / "cat.yaml").write_text(
+            yaml.dump({"name": "Cat", "location": "start", "ink": "cat.ink"}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "harry.yaml").write_text(
+            yaml.dump({"name": "Harry", "location": "start", "ink": "harry.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL has(target, item)\n"
+            "EXTERNAL add(target, item)\n"
+            "EXTERNAL set(key, value)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "harry.ink").write_text(
+            "-> root\n=== root ===\n"
+            '~ add("$player.inventory", "cat_treats")\n'
+            "-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "cat.ink").write_text(
+            "-> root\n=== root ===\n"
+            "Meow.\n"
+            '{not has("$player.inventory", "cat_treats"): -> END}\n'
+            "+ Bribe\n"
+            '    ~ set("quests.find_cat.completed", 1)\n'
+            "-> END\n",
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+        plan = (game_dir / "artefacts" / "find_cat.txt").read_text(
+            encoding="utf-8"
+        )
+        assert plan.index("talk_harry") < plan.index(
+            "branch_cat_root_to___content__root_choice_gate"
+        )
+        assert plan.index("branch_cat_root_to___content__root_choice_gate") < plan.index(
+            "branch_cat___content__root_choice_gate_to___choice__root__c-0"
+        )
+
     def test_fallthrough_branch_requires_all_previous_conditions(
         self, tmp_path: Path
     ) -> None:
@@ -194,6 +395,280 @@ class TestRoomReachabilityValidator:
             encoding="utf-8",
         )
         assert validate_quests(game_dir) == []
+
+    def test_crafting_requires_reaching_a_scenario_call_in_dialogue(
+        self, tmp_path: Path
+    ) -> None:
+        """Crafting should only be available after a dialogue triggers the craft scenario."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {
+                    "objects": ["hero", "cynthia"],
+                    "exits": {"East": "lab_room"},
+                },
+                "lab_room": {"objects": ["lab"], "exits": {"West": "start"}},
+            },
+            quests_config={"cure_cynthia": {"name": "Cure Cynthia"}},
+        )
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
+            yaml.dump({"name": "Player", "location": "lab_room", "inventory": ["freewort", "merwort", "lab_key"]}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "lab.yaml").write_text(
+            yaml.dump({"name": "Lab", "location": "lab_room", "ink": "lab.ink"}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "scenarios").mkdir(exist_ok=True)
+        (game_dir / "world" / "scenarios" / "lab.yaml").write_text(
+            yaml.dump({"context": "craft", "recipes": "recipes"}),
+            encoding="utf-8",
+        )
+        (game_dir / "recipes.yaml").write_text(
+            yaml.dump({"recipes": [{"input": ["freewort", "merwort"], "output": ["resist_paralysis"]}]}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "cynthia.yaml").write_text(
+            yaml.dump({"name": "Cynthia", "location": "start", "ink": "cynthia.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL has(target, item)\nEXTERNAL set(key, value)\nEXTERNAL scenario(handle)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "lab.ink").write_text(
+            '{ has("$player.inventory", "lab_key"):\n    ~ scenario("lab")\n}\n-> END\n',
+            encoding="utf-8",
+        )
+        (dialogue_dir / "cynthia.ink").write_text(
+            '-> root\n=== root ===\n{ has("$player.inventory", "resist_paralysis"): -> cure}\n-> END\n'
+            '=== cure ===\n~ set("quests.cure_cynthia.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
+            yaml.dump({"name": "Player", "location": "lab_room", "inventory": ["freewort", "merwort"]}),
+            encoding="utf-8",
+        )
+        assert validate_quests(game_dir) == ["cure_cynthia"]
+
+    def test_quest_can_be_completed_by_crafting_relevant_item(
+        self, tmp_path: Path
+    ) -> None:
+        """Crafting should only be available in rooms wired to a craft scenario."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {"objects": ["hero", "cynthia"]},
+                "lab_room": {"objects": ["lab"]},
+            },
+            quests_config={"cure_cynthia": {"name": "Cure Cynthia"}},
+        )
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Player",
+                    "location": "start",
+                    "inventory": ["freewort", "merwort"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "lab.yaml").write_text(
+            yaml.dump({"name": "Lab", "location": "lab_room", "ink": "lab.ink"}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "cynthia.yaml").write_text(
+            yaml.dump({"name": "Cynthia", "location": "start", "ink": "cynthia.ink"}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "scenarios").mkdir(exist_ok=True)
+        (game_dir / "world" / "scenarios" / "lab.yaml").write_text(
+            yaml.dump({"context": "craft", "recipes": "recipes"}),
+            encoding="utf-8",
+        )
+        (game_dir / "recipes.yaml").write_text(
+            yaml.dump({"recipes": [{"input": ["freewort", "merwort"], "output": ["resist_paralysis"]}]}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL has(target, item)\nEXTERNAL set(key, value)\nEXTERNAL scenario(handle)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "lab.ink").write_text(
+            "~ scenario(\"lab\")\n-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "cynthia.ink").write_text(
+            '-> root\n=== root ===\n{ has("$player.inventory", "resist_paralysis"): -> cure}\n-> END\n'
+            '=== cure ===\n~ set("quests.cure_cynthia.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == ["cure_cynthia"]
+        (game_dir / "world" / "rooms" / "start.yaml").write_text(
+            yaml.dump({"name": "Start", "exits": {"East": "lab_room"}, "objects": ["cynthia"]}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "rooms" / "lab_room.yaml").write_text(
+            yaml.dump({"name": "Lab Room", "exits": {"West": "start"}, "objects": ["lab", "hero"]}),
+            encoding="utf-8",
+        )
+        assert validate_quests(game_dir) == []
+
+    def test_crafting_requires_returning_to_the_craft_room(
+        self, tmp_path: Path
+    ) -> None:
+        """Crafting after collecting ingredients must happen back at the lab."""
+        game_dir = create_test_game(
+            tmp_path,
+            {
+                "start": {
+                    "objects": ["hero", "cynthia"],
+                    "exits": {"East": "lab_room", "West": "grove"},
+                },
+                "lab_room": {
+                    "objects": ["lab"],
+                    "exits": {"West": "start"},
+                },
+                "grove": {
+                    "items": ["freewort", "merwort"],
+                    "exits": {"East": "start"},
+                },
+            },
+            quests_config={"cure_cynthia": {"name": "Cure Cynthia"}},
+        )
+        (game_dir / "world" / "rooms" / "grove.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Grove",
+                    "exits": {"East": "start"},
+                    "items": ["freewort", "merwort"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
+            yaml.dump({"name": "Player", "location": "start", "inventory": []}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "lab.yaml").write_text(
+            yaml.dump({"name": "Lab", "location": "lab_room", "ink": "lab.ink"}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "cynthia.yaml").write_text(
+            yaml.dump({"name": "Cynthia", "location": "start", "ink": "cynthia.ink"}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "scenarios").mkdir(exist_ok=True)
+        (game_dir / "world" / "scenarios" / "lab.yaml").write_text(
+            yaml.dump({"context": "craft", "recipes": "recipes"}),
+            encoding="utf-8",
+        )
+        (game_dir / "recipes.yaml").write_text(
+            yaml.dump(
+                {
+                    "recipes": [
+                        {
+                            "input": ["freewort", "merwort"],
+                            "output": ["resist_paralysis"],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL has(target, item)\n"
+            "EXTERNAL set(key, value)\n"
+            "EXTERNAL scenario(handle)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "lab.ink").write_text(
+            '~ scenario("lab")\n-> END\n', encoding="utf-8"
+        )
+        (dialogue_dir / "cynthia.ink").write_text(
+            '-> root\n=== root ===\n'
+            '{ has("$player.inventory", "resist_paralysis"): -> cure}\n'
+            '-> END\n=== cure ===\n'
+            '~ set("quests.cure_cynthia.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+        plan = (game_dir / "artefacts" / "cure_cynthia.txt").read_text(
+            encoding="utf-8"
+        )
+        assert plan.index("take_grove_freewort") < plan.index(
+            "craft_lab_0_lab_room"
+        )
+        assert plan.index("take_grove_merwort") < plan.index(
+            "craft_lab_0_lab_room"
+        )
+        assert plan.index("move_grove_to_start") < plan.index(
+            "move_start_to_lab_room"
+        )
+        assert plan.index("move_start_to_lab_room") < plan.index(
+            "craft_lab_0_lab_room"
+        )
+        assert plan.index("craft_lab_0_lab_room") < plan.index(
+            "move_lab_room_to_start"
+        )
+        assert plan.index("move_lab_room_to_start") < plan.index("talk_cynthia")
+
+    def test_stitches_are_equivalent_to_flattened_knots_for_reachability(
+        self, tmp_path: Path
+    ) -> None:
+        """Stitch targets should be reachable through their flattened knot form."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"exits": {}}},
+            quests_config={"finish": {"name": "Finish"}},
+        )
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
+            yaml.dump({"name": "Alice", "location": "start", "ink": "alice.ink"}),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL get(key)\nEXTERNAL set(key, value)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "alice.ink").write_text(
+            '-> root\n=== root ===\n-> my_knot.my_stitch\n== my_knot\n= my_stitch\n~ set("quests.finish.completed", 1)\n-> END\n',
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+
+    def test_stitch_alias_does_not_collide_with_existing_flat_knots(
+        self, tmp_path: Path
+    ) -> None:
+        """A real flat knot name must not be merged with a dotted stitch alias."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"exits": {}}},
+            quests_config={"finish": {"name": "Finish"}},
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text("", encoding="utf-8")
+        (dialogue_dir / "alice.ink").write_text(
+            '-> root\n=== root ===\n-> my_knot.my_stitch\n== my_knot\n= my_stitch\n-> END\n== my_knotmy_stitch\n-> END\n',
+            encoding="utf-8",
+        )
+
+        graph, *_ = analyze_ink_file("alice.ink", dialogue_dir, game_dir)
+        assert "my_knot.my_stitch" in graph
+        assert "my_knotmy_stitch" in graph
 
     def test_accost_blocks_entry_until_dialogue_changes_state(
         self, tmp_path: Path

@@ -153,6 +153,109 @@ def load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _load_craft_recipes(game_path: Path) -> list[dict[str, Any]]:
+    """Load crafting recipes from scenario files, filtering to actual craft contexts."""
+    recipes: list[dict[str, Any]] = []
+    scenario_dir = game_path / "world" / "scenarios"
+    if not scenario_dir.exists():
+        scenario_dir = game_path / "scenarios"
+
+    for scenario_path in sorted(scenario_dir.glob("*.yaml")):
+        data = load_yaml(scenario_path)
+        if not isinstance(data, dict):
+            continue
+        if data.get("context") != "craft":
+            continue
+        recipe_ref = data.get("recipes")
+        if not isinstance(recipe_ref, str):
+            continue
+        recipes_path = game_path / f"{recipe_ref}.yaml"
+        if not recipes_path.exists():
+            recipes_path = scenario_dir / f"{recipe_ref}.yaml"
+        if not recipes_path.exists():
+            continue
+        raw = load_yaml(recipes_path)
+        if isinstance(raw, dict):
+            raw_recipes = raw.get("recipes", [])
+        else:
+            raw_recipes = []
+        if isinstance(raw_recipes, list):
+            recipes.extend(recipe for recipe in raw_recipes if isinstance(recipe, dict))
+
+    fallback_path = game_path / "recipes.yaml"
+    if not recipes and fallback_path.exists():
+        raw = load_yaml(fallback_path)
+        if isinstance(raw, dict):
+            raw_recipes = raw.get("recipes", [])
+            if isinstance(raw_recipes, list):
+                recipes.extend(recipe for recipe in raw_recipes if isinstance(recipe, dict))
+
+    return recipes
+
+
+def _load_craft_scenarios(game_path: Path) -> dict[str, list[dict[str, Any]]]:
+    """Map each craft scenario name to the recipe list it exposes."""
+    scenarios: dict[str, list[dict[str, Any]]] = {}
+    scenario_dir = game_path / "world" / "scenarios"
+    if not scenario_dir.exists():
+        scenario_dir = game_path / "scenarios"
+    if not scenario_dir.exists():
+        return scenarios
+
+    for scenario_path in sorted(scenario_dir.glob("*.yaml")):
+        data = load_yaml(scenario_path)
+        if not isinstance(data, dict) or data.get("context") != "craft":
+            continue
+        recipe_ref = data.get("recipes")
+        if not isinstance(recipe_ref, str):
+            continue
+        recipes_path = game_path / f"{recipe_ref}.yaml"
+        if not recipes_path.exists():
+            recipes_path = scenario_dir / f"{recipe_ref}.yaml"
+        if not recipes_path.exists():
+            continue
+        raw = load_yaml(recipes_path)
+        raw_recipes = raw.get("recipes", []) if isinstance(raw, dict) else []
+        scenarios[scenario_path.stem] = [
+            recipe for recipe in raw_recipes if isinstance(recipe, dict)
+        ]
+
+    fallback_path = game_path / "recipes.yaml"
+    if not scenarios and fallback_path.exists():
+        raw = load_yaml(fallback_path)
+        raw_recipes = raw.get("recipes", []) if isinstance(raw, dict) else []
+        scenarios["craft"] = [
+            recipe for recipe in raw_recipes if isinstance(recipe, dict)
+        ]
+    return scenarios
+
+
+def _craft_rooms_for_game(objects: dict[str, Any], rooms: dict[str, Any], game_path: Path) -> set[str]:
+    """Only allow crafting in rooms whose object is wired to a craft scenario."""
+    scenario_dir = game_path / "world" / "scenarios"
+    if not scenario_dir.exists():
+        scenario_dir = game_path / "scenarios"
+    if not scenario_dir.exists():
+        return set()
+
+    craft_rooms: set[str] = set()
+    for room_id, room_data in rooms.items():
+        for object_id in room_data.get("objects", []):
+            object_data = objects.get(object_id, {})
+            ink_ref = object_data.get("ink", object_data.get("dialogue", f"{object_id}.ink"))
+            if not isinstance(ink_ref, str):
+                continue
+            scenario_name = Path(ink_ref).stem
+            scenario_path = scenario_dir / f"{scenario_name}.yaml"
+            if not scenario_path.exists():
+                continue
+            raw = load_yaml(scenario_path)
+            if not isinstance(raw, dict) or raw.get("context") != "craft":
+                continue
+            craft_rooms.add(room_id)
+    return craft_rooms
+
+
 def _bind_var_path(var_path: str, npc_id: str, w: world.World) -> str:
     npc_room = ""
     try:
@@ -187,6 +290,18 @@ def _evaluate_has_initial_state(bound_list: str, item: str, w: world.World) -> b
         return False
 
 
+def _discrete_value_key(value: Any) -> tuple[str, Any] | None:
+    if isinstance(value, bool):
+        return ("number", int(value))
+    if isinstance(value, (int, float)):
+        return ("number", value)
+    if isinstance(value, str):
+        return ("string", value)
+    if value is None:
+        return ("none", None)
+    return None
+
+
 def validate_quests(
     game_path: Path | str, *, profile: bool = False
 ) -> list[str]:
@@ -219,6 +334,8 @@ def validate_quests(
     npc_has_conditions: dict[str, dict[str, list[tuple[str, str, str, bool]]]] = {}
     npc_list_mutations: dict[str, dict[str, list[tuple[str, str, bool]]]] = {}
     npc_move_mutations: dict[str, dict[str, list[tuple[str, str, str]]]] = {}
+    npc_scenario_calls: dict[str, dict[str, set[str]]] = {}
+    npc_guard_expressions: dict[str, dict[str, list[tuple[str, Any]]]] = {}
 
     for obj_id, obj_data in objects.items():
         if obj_id == player_handle:
@@ -229,21 +346,45 @@ def validate_quests(
             ink_file = find_ink_path(f"{ink_ref}.ink", dialogue_dir)
             if ink_file and ink_file.exists():
                 try:
+                    def resolve_external_argument(
+                        function_name: str, args: list[Any], _origin: str, id=obj_id
+                    ) -> Any:
+                        if (
+                            function_name == "get"
+                            and len(args) == 1
+                            and isinstance(args[0], str)
+                        ):
+                            return w.get_state(
+                                resolve_bound_path(args[0], id)
+                            )
+                        return None
+
                     (
                         graph,
-                        _,
+                        scenario_calls,
                         get_conds,
                         set_muts,
                         has_conds,
                         list_muts,
                         move_muts,
-                    ) = analyze_ink_file(f"{ink_ref}.ink", dialogue_dir, game_path)
+                        guard_expressions,
+                    ) = analyze_ink_file(
+                        f"{ink_ref}.ink",
+                        dialogue_dir,
+                        game_path,
+                        resolve_external_argument,
+                    )
                     npc_dialogue_graphs[obj_id] = graph
                     npc_get_conditions[obj_id] = get_conds
                     npc_set_mutations[obj_id] = set_muts
                     npc_has_conditions[obj_id] = has_conds
                     npc_list_mutations[obj_id] = list_muts
                     npc_move_mutations[obj_id] = move_muts
+                    npc_guard_expressions[obj_id] = guard_expressions
+                    by_origin: dict[str, set[str]] = {}
+                    for origin, script in scenario_calls:
+                        by_origin.setdefault(origin, set()).add(script)
+                    npc_scenario_calls[obj_id] = by_origin
                 except (OSError, ValueError, TypeError):
                     pass
 
@@ -269,6 +410,8 @@ def validate_quests(
             bool(list_list) for knot_name, list_list in list_map.items() if knot_name in reachable_knots
         ) or any(
             bool(move_list) for knot_name, move_list in move_map.items() if knot_name in reachable_knots
+        ) or any(
+            bool(scripts) for knot_name, scripts in npc_scenario_calls.get(npc_id, {}).items() if knot_name in reachable_knots
         )
         if not dyn:
             unreachable = sorted(set(graph) - reachable_knots)
@@ -368,6 +511,36 @@ def validate_quests(
     # in the reachable dialogue subgraph, so the planner sees only relevant state.
     relevant_var_paths: set[str] = set()
     relevant_list_paths: set[tuple[str, str]] = set()
+    finite_guard_paths: set[str] = set()
+    discrete_values_by_path: dict[str, set[tuple[str, Any]]] = {}
+
+    def collect_expression_values(expression: Any, npc_id: str) -> None:
+        if not isinstance(expression, tuple) or not expression:
+            return
+        operator = expression[0]
+        if operator in ("==", "!=") and len(expression) == 3:
+            left, right = expression[1], expression[2]
+            if isinstance(left, tuple) and len(left) == 2 and left[0] == "get":
+                value_key = _discrete_value_key(right)
+                bound_path = resolve_bound_path(left[1], npc_id)
+                relevant_var_paths.add(bound_path)
+                finite_guard_paths.add(bound_path)
+                if value_key is not None:
+                    discrete_values_by_path.setdefault(bound_path, set()).add(
+                        value_key
+                    )
+            if isinstance(right, tuple) and len(right) == 2 and right[0] == "get":
+                value_key = _discrete_value_key(left)
+                bound_path = resolve_bound_path(right[1], npc_id)
+                relevant_var_paths.add(bound_path)
+                finite_guard_paths.add(bound_path)
+                if value_key is not None:
+                    discrete_values_by_path.setdefault(bound_path, set()).add(
+                        value_key
+                    )
+        for child in expression[1:]:
+            collect_expression_values(child, npc_id)
+
     for npc_id, graph in npc_dialogue_graphs.items():
         relevant = relevant_knots_by_npc.get(npc_id, set())
         if not relevant:
@@ -392,7 +565,44 @@ def validate_quests(
                 continue
             for list_path, item_name, _ in list_list:
                 relevant_list_paths.add((resolve_bound_path(list_path, npc_id), item_name))
+        for knot_name, expressions in npc_guard_expressions.get(npc_id, {}).items():
+            if knot_name not in relevant:
+                continue
+            for _, expression in expressions:
+                collect_expression_values(expression, npc_id)
+    for npc_id, mutations_by_knot in npc_set_mutations.items():
+        relevant = relevant_knots_by_npc.get(npc_id, set())
+        for knot_name, mutations in mutations_by_knot.items():
+            if knot_name not in relevant:
+                continue
+            for var_path, value in mutations:
+                bound_path = resolve_bound_path(var_path, npc_id)
+                value_key = _discrete_value_key(value)
+                if value_key is not None and bound_path in finite_guard_paths:
+                    discrete_values_by_path.setdefault(bound_path, set()).add(
+                        value_key
+                    )
     relevant_var_paths.update(movement_accost_paths)
+
+    craft_scenarios = _load_craft_scenarios(game_path)
+    craft_recipes = [recipe for recipes in craft_scenarios.values() for recipe in recipes]
+    relevant_inventory_items = {
+        item_name
+        for bound_path, item_name in relevant_list_paths
+        if bound_path == player_inv_path
+    }
+    relevant_recipe_items: set[str] = set()
+    if craft_recipes:
+        for recipe in craft_recipes:
+            recipe_items = [
+                str(item)
+                for item in list(recipe.get("input", [])) + list(recipe.get("output", []))
+            ]
+            if any(item in relevant_inventory_items for item in recipe_items):
+                relevant_recipe_items.update(recipe_items)
+        relevant_list_paths.update(
+            (player_inv_path, item_name) for item_name in sorted(relevant_recipe_items)
+        )
 
     quest_set_candidates: dict[str, list[tuple[str, str]]] = {
         quest_id: [] for quest_id in quest_ids
@@ -479,6 +689,30 @@ def validate_quests(
         var_fluents_true[bound_var] = fl_true
         var_fluents_false[bound_var] = fl_false
 
+    discrete_value_fluents: dict[tuple[str, tuple[str, Any]], Any] = {}
+    binary_numeric_value_paths: set[str] = set()
+    for bound_path, value_keys in sorted(discrete_values_by_path.items()):
+        try:
+            initial_value_key = _discrete_value_key(w.get_state(bound_path))
+        except (KeyError, IndexError, TypeError):
+            initial_value_key = None
+        if initial_value_key is not None:
+            value_keys.add(initial_value_key)
+        if value_keys.issubset(
+            {("number", 0), ("number", 1)}
+        ):
+            binary_numeric_value_paths.add(bound_path)
+            continue
+        for value_key in sorted(value_keys, key=repr):
+            fluent_index = len(discrete_value_fluents)
+            value_fluent = up.Fluent(f"var_value_{fluent_index}")
+            problem.add_fluent(value_fluent, default_initial_value=False)
+            problem.set_initial_value(
+                value_fluent(),
+                value_key == initial_value_key,
+            )
+            discrete_value_fluents[(bound_path, value_key)] = value_fluent
+
     # Collect bound list-item pairs for reachable has/add/remove actions only.
     all_bound_has_items: set[tuple[str, str]] = set(relevant_list_paths)
 
@@ -501,6 +735,89 @@ def validate_quests(
         problem.set_initial_value(fl_false, not init_has)
         has_fluents_true[(bound_list, item)] = fl_true
         has_fluents_false[(bound_list, item)] = fl_false
+
+    def to_planning_expression(expression: Any, npc_id: str) -> Any | None:
+        if not isinstance(expression, tuple) or not expression:
+            return None
+        operator = expression[0]
+        if operator == "get" and len(expression) == 2:
+            bound_var = resolve_bound_path(expression[1], npc_id)
+            return (
+                var_fluents_true[bound_var]()
+                if bound_var in var_fluents_true
+                else None
+            )
+        if operator == "has" and len(expression) == 3:
+            bound_list = resolve_bound_path(expression[1], npc_id)
+            key = (bound_list, expression[2])
+            return (
+                has_fluents_true[key]()
+                if key in has_fluents_true
+                else None
+            )
+        if operator in ("==", "!=") and len(expression) == 3:
+            left, right = expression[1], expression[2]
+            get_operand = None
+            compared_value = None
+            if isinstance(left, tuple) and len(left) == 2 and left[0] == "get":
+                get_operand, compared_value = left, right
+            elif isinstance(right, tuple) and len(right) == 2 and right[0] == "get":
+                get_operand, compared_value = right, left
+            if get_operand is None:
+                return None
+            value_key = _discrete_value_key(compared_value)
+            bound_var = resolve_bound_path(get_operand[1], npc_id)
+            value_fluent = (
+                discrete_value_fluents.get((bound_var, value_key))
+                if value_key is not None
+                else None
+            )
+            if (
+                value_fluent is None
+                and bound_var in binary_numeric_value_paths
+                and value_key == ("number", 0)
+                and bound_var in var_fluents_false
+            ):
+                return var_fluents_false[bound_var]()
+            if (
+                value_fluent is None
+                and bound_var in binary_numeric_value_paths
+                and value_key == ("number", 1)
+                and bound_var in var_fluents_true
+            ):
+                return var_fluents_true[bound_var]()
+            if value_fluent is None:
+                return None
+            result = value_fluent()
+            return result if operator == "==" else up.Not(result)
+        if operator == "not" and len(expression) == 2:
+            child = to_planning_expression(expression[1], npc_id)
+            return up.Not(child) if child is not None else None
+        if operator in ("and", "or") and len(expression) == 3:
+            left = to_planning_expression(expression[1], npc_id)
+            right = to_planning_expression(expression[2], npc_id)
+            if left is None or right is None:
+                return None
+            return up.And(left, right) if operator == "and" else up.Or(left, right)
+        return None
+
+    def add_set_effects(
+        action: Any, mutations: list[tuple[str, Any]], npc_id: str
+    ) -> None:
+        for var_path, value in mutations:
+            bound_var = resolve_bound_path(var_path, npc_id)
+            if bound_var in var_fluents_true:
+                bool_value = bool(value)
+                action.add_effect(var_fluents_true[bound_var], bool_value)
+                action.add_effect(var_fluents_false[bound_var], not bool_value)
+            value_key = _discrete_value_key(value)
+            if value_key is None:
+                continue
+            for (candidate_path, candidate_key), fluent in (
+                discrete_value_fluents.items()
+            ):
+                if candidate_path == bound_var:
+                    action.add_effect(fluent, candidate_key == value_key)
 
     # Add room objects
     room_objs: dict[str, Any] = {}
@@ -536,10 +853,66 @@ def validate_quests(
     if profiler:
         action_timer.__exit__(None, None, None)
 
+    # Crafting is only available after a dialogue triggers a craft scenario, and the
+    # scenario must be reachable in the room's object dialogue stack. This mirrors
+    # runtime behavior: a lab only becomes a crafting bench if the dialogue actually
+    # calls ~scenario("lab").
+    craft_item_names = {
+        item_name
+        for bound_path, item_name in all_bound_has_items
+        if bound_path == player_inv_path
+    }
+    scenario_fluents: dict[str, Any] = {}
+    for scenario_name in sorted(craft_scenarios):
+        fl = up.Fluent(f"scenario_{scenario_name}_active")
+        problem.add_fluent(fl, default_initial_value=False)
+        scenario_fluents[scenario_name] = fl
+
+    craft_rooms_by_scenario: dict[str, set[str]] = {script: set() for script in craft_scenarios}
+    for room_name, room_data in rooms.items():
+        for object_id in room_data.get("objects", []):
+            scenario_scripts = set()
+            for origin_scripts in npc_scenario_calls.get(object_id, {}).values():
+                scenario_scripts.update(origin_scripts)
+            for script_name in scenario_scripts & set(craft_scenarios):
+                craft_rooms_by_scenario.setdefault(script_name, set()).add(room_name)
+
+    for script_name, recipes in craft_scenarios.items():
+        for index, recipe in enumerate(recipes):
+            recipe_items = [
+                str(item) for item in list(recipe.get("input", [])) + list(recipe.get("output", []))
+            ]
+            if not recipe_items:
+                continue
+            if not any(item in craft_item_names for item in recipe_items):
+                continue
+            inputs = [str(item) for item in recipe.get("input", [])]
+            outputs = [str(item) for item in recipe.get("output", [])]
+            for room_name in sorted(craft_rooms_by_scenario.get(script_name, set())):
+                action_name = (
+                    f"craft_{script_name}_{index}_{room_name}_{'_'.join(sorted(set(inputs + outputs)))}"
+                )
+                craft_act = up.InstantaneousAction(action_name)
+                craft_act.add_precondition(scenario_fluents[script_name])
+                craft_act.add_precondition(at_room(room_objs[room_name]))
+                craft_act.add_precondition(in_explore)
+                for item in inputs:
+                    key = (player_inv_path, item)
+                    if key in has_fluents_true:
+                        craft_act.add_precondition(has_fluents_true[key])
+                for item in inputs:
+                    key = (player_inv_path, item)
+                    if key in has_fluents_true:
+                        craft_act.add_effect(has_fluents_true[key], False)
+                        craft_act.add_effect(has_fluents_false[key], True)
+                for item in outputs:
+                    key = (player_inv_path, item)
+                    if key in has_fluents_true:
+                        craft_act.add_effect(has_fluents_true[key], True)
+                        craft_act.add_effect(has_fluents_false[key], False)
+                problem.add_action(craft_act)
+
     # Add room transitions (move actions)
-    # Note: crafting is modelled in the text runner, but the validator intentionally
-    # does not remove inputs or add outputs here: it focuses on quest reachability
-    # rather than simulating the player economy or item transformations.
     if profiler:
         action_timer = profiler.time_actions("Explore Context")
         action_timer.__enter__()
@@ -600,18 +973,24 @@ def validate_quests(
 
         if npc_room in room_objs:
             talk_act = up.InstantaneousAction(f"talk_{npc_id}")
-            talk_act.add_precondition(at_room(room_objs[npc_room]))
             talk_act.add_precondition(in_explore)
+            has_guarded_scenario = any(
+                any(target.startswith("__scenario__") for target, _, _ in conds)
+                for conds in npc_get_conditions.get(npc_id, {}).values()
+            ) or any(
+                any(target.startswith("__scenario__") for target, _, _, _ in conds)
+                for conds in npc_has_conditions.get(npc_id, {}).values()
+            )
+            if not has_guarded_scenario and npc_room in room_objs:
+                talk_act.add_precondition(at_room(room_objs[npc_room]))
             talk_act.add_effect(in_explore, False)
             talk_act.add_effect(in_dialogue(npc_obj), True)
             talk_act.add_effect(at_knot(npc_obj, knot_objs["__root__"]), True)
-            # Apply set mutations from __root__
-            for set_k, set_v in npc_set_mutations.get(npc_id, {}).get("__root__", []):
-                bound_k = resolve_bound_path(set_k, npc_id)
-                if bound_k in var_fluents_true:
-                    val_bool = bool(set_v)
-                    talk_act.add_effect(var_fluents_true[bound_k], val_bool)
-                    talk_act.add_effect(var_fluents_false[bound_k], not val_bool)
+            add_set_effects(
+                talk_act,
+                npc_set_mutations.get(npc_id, {}).get("__root__", []),
+                npc_id,
+            )
             add_completion_effects(
                 talk_act, npc_set_mutations.get(npc_id, {}).get("__root__", [])
             )
@@ -644,6 +1023,7 @@ def validate_quests(
         has_conds = npc_has_conditions.get(npc_id, {})
         list_muts = npc_list_mutations.get(npc_id, {})
         move_muts = npc_move_mutations.get(npc_id, {})
+        guard_expressions = npc_guard_expressions.get(npc_id, {})
         for src_knot, targets in graph.items():
             if src_knot not in knot_objs:
                 continue
@@ -656,37 +1036,62 @@ def validate_quests(
                     branch_act.add_precondition(at_knot(npc_obj, knot_objs[src_knot]))
                     branch_act.add_effect(at_knot(npc_obj, knot_objs[src_knot]), False)
                     branch_act.add_effect(at_knot(npc_obj, knot_objs[tgt_knot]), True)
+                    if tgt_knot.startswith("__scenario__"):
+                        script_name = tgt_knot.removeprefix("__scenario__")
+                        if script_name in scenario_fluents:
+                            branch_act.add_effect(scenario_fluents[script_name], True)
+                    for script_name in npc_scenario_calls.get(npc_id, {}).get(src_knot, set()):
+                        if script_name in scenario_fluents:
+                            branch_act.add_effect(scenario_fluents[script_name], True)
 
                     # Check get() guards for this target
                     cond_matches = [c for c in src_conds if c[0] == tgt_knot]
-                    for cond in cond_matches:
-                        _, var_path, negated = cond
-                        bound_k = resolve_bound_path(var_path, npc_id)
-                        if bound_k in var_fluents_true:
-                            if negated:
-                                branch_act.add_precondition(var_fluents_false[bound_k])
-                            else:
-                                branch_act.add_precondition(var_fluents_true[bound_k])
-
                     # Check has() guards for this target
                     has_matches = [c for c in src_hass if c[0] == tgt_knot]
-                    for has_cond in has_matches:
-                        _, list_path, item_name, negated = has_cond
-                        bound_list = resolve_bound_path(list_path, npc_id)
-                        key = (bound_list, item_name)
-                        if key in has_fluents_true:
-                            if negated:
-                                branch_act.add_precondition(has_fluents_false[key])
-                            else:
-                                branch_act.add_precondition(has_fluents_true[key])
+                    target_expressions = [
+                        expression
+                        for target, expression in guard_expressions.get(src_knot, [])
+                        if target == tgt_knot
+                    ]
+
+                    planning_expressions = [
+                        to_planning_expression(expression, npc_id)
+                        for expression in target_expressions
+                    ]
+                    if target_expressions and all(
+                        expression is not None for expression in planning_expressions
+                    ):
+                        for expression in planning_expressions:
+                            branch_act.add_precondition(expression)
+                    else:
+                        for cond in cond_matches:
+                            _, var_path, negated = cond
+                            bound_k = resolve_bound_path(var_path, npc_id)
+                            if bound_k in var_fluents_true:
+                                if negated:
+                                    branch_act.add_precondition(
+                                        var_fluents_false[bound_k]
+                                    )
+                                else:
+                                    branch_act.add_precondition(
+                                        var_fluents_true[bound_k]
+                                    )
+                        for has_cond in has_matches:
+                            _, list_path, item_name, negated = has_cond
+                            bound_list = resolve_bound_path(list_path, npc_id)
+                            key = (bound_list, item_name)
+                            if key in has_fluents_true:
+                                if negated:
+                                    branch_act.add_precondition(
+                                        has_fluents_false[key]
+                                    )
+                                else:
+                                    branch_act.add_precondition(
+                                        has_fluents_true[key]
+                                    )
 
                     # Apply set() mutations from target knot
-                    for set_k, set_v in set_muts.get(tgt_knot, []):
-                        bound_k = resolve_bound_path(set_k, npc_id)
-                        if bound_k in var_fluents_true:
-                            val_bool = bool(set_v)
-                            branch_act.add_effect(var_fluents_true[bound_k], val_bool)
-                            branch_act.add_effect(var_fluents_false[bound_k], not val_bool)
+                    add_set_effects(branch_act, set_muts.get(tgt_knot, []), npc_id)
                     add_completion_effects(branch_act, set_muts.get(tgt_knot, []))
                     add_move_effects(branch_act, move_muts.get(tgt_knot, []), npc_id)
                     if any(
@@ -695,11 +1100,15 @@ def validate_quests(
                     ):
                         add_pass_effects(branch_act, npc_id)
 
-                    # Apply list mutations from target knot
+                    # Apply list mutations from target knot.
+                    # If the branch removes an item from the player inventory, we must
+                    # already possess it before taking that branch.
                     for list_path, item_name, is_add in list_muts.get(tgt_knot, []):
                         bound_list = resolve_bound_path(list_path, npc_id)
                         key = (bound_list, item_name)
                         if key in has_fluents_true:
+                            if not is_add and bound_list == player_inv_path:
+                                branch_act.add_precondition(has_fluents_true[key])
                             branch_act.add_effect(has_fluents_true[key], is_add)
                             branch_act.add_effect(has_fluents_false[key], not is_add)
 
@@ -738,12 +1147,11 @@ def validate_quests(
         for room in room_objs.values():
             intercept_act.add_effect(pending_move(room), False)
         intercept_act.add_effect(pending_move(room_objs[destination]), True)
-        for set_k, set_v in npc_set_mutations.get(npc_id, {}).get("__root__", []):
-            bound_k = resolve_bound_path(set_k, npc_id)
-            if bound_k in var_fluents_true:
-                val_bool = bool(set_v)
-                intercept_act.add_effect(var_fluents_true[bound_k], val_bool)
-                intercept_act.add_effect(var_fluents_false[bound_k], not val_bool)
+        add_set_effects(
+            intercept_act,
+            npc_set_mutations.get(npc_id, {}).get("__root__", []),
+            npc_id,
+        )
         add_completion_effects(
             intercept_act, npc_set_mutations.get(npc_id, {}).get("__root__", [])
         )
