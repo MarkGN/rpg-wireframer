@@ -19,6 +19,7 @@ import yaml
 from runners import world
 from runners.binder import Binder
 from validate.ink_analyser import (
+    LOOT_ALL_ITEMS,
     PASS_MOVE_DESTINATION,
     _collect_reachable_knots,
     analyze_ink_file,
@@ -327,6 +328,16 @@ def validate_quests(
 
     bound_cache: dict[tuple[str, str], str] = {}
 
+    def resolve_inventory_item(item: Any, npc_id: str) -> str | None:
+        if isinstance(item, tuple) and len(item) == 2 and item[0] == "get":
+            item = item[1]
+        if isinstance(item, str) and item.startswith("$"):
+            try:
+                item = w.get_state(resolve_bound_path(item, npc_id))
+            except (KeyError, IndexError, TypeError):
+                return None
+        return item if isinstance(item, str) else None
+
     # Map NPC dialogues
     npc_dialogue_graphs: dict[str, dict[str, set[str]]] = {}
     npc_get_conditions: dict[str, dict[str, list[tuple[str, str, bool]]]] = {}
@@ -559,12 +570,32 @@ def validate_quests(
             if knot_name not in relevant:
                 continue
             for _, list_path, item_name, _ in has_list:
-                relevant_list_paths.add((resolve_bound_path(list_path, npc_id), item_name))
+                resolved_item = resolve_inventory_item(item_name, npc_id)
+                if resolved_item is not None:
+                    relevant_list_paths.add(
+                        (resolve_bound_path(list_path, npc_id), resolved_item)
+                    )
         for knot_name, list_list in npc_list_mutations.get(npc_id, {}).items():
             if knot_name not in relevant:
                 continue
             for list_path, item_name, _ in list_list:
-                relevant_list_paths.add((resolve_bound_path(list_path, npc_id), item_name))
+                if item_name == LOOT_ALL_ITEMS:
+                    bound_list = resolve_bound_path(list_path, npc_id)
+                    try:
+                        loot_items = w.get_state(bound_list)
+                    except (KeyError, IndexError, TypeError):
+                        loot_items = []
+                    if isinstance(loot_items, list):
+                        for loot_item in loot_items:
+                            if isinstance(loot_item, str):
+                                relevant_list_paths.add((bound_list, loot_item))
+                                relevant_list_paths.add(
+                                    (player_inv_path, loot_item)
+                                )
+                else:
+                    relevant_list_paths.add(
+                        (resolve_bound_path(list_path, npc_id), item_name)
+                    )
         for knot_name, expressions in npc_guard_expressions.get(npc_id, {}).items():
             if knot_name not in relevant:
                 continue
@@ -749,7 +780,10 @@ def validate_quests(
             )
         if operator == "has" and len(expression) == 3:
             bound_list = resolve_bound_path(expression[1], npc_id)
-            key = (bound_list, expression[2])
+            item_name = resolve_inventory_item(expression[2], npc_id)
+            if item_name is None:
+                return None
+            key = (bound_list, item_name)
             return (
                 has_fluents_true[key]()
                 if key in has_fluents_true
@@ -818,6 +852,40 @@ def validate_quests(
             ):
                 if candidate_path == bound_var:
                     action.add_effect(fluent, candidate_key == value_key)
+
+    def add_list_mutation_effects(
+        action: Any,
+        mutations: list[tuple[str, str, bool]],
+        npc_id: str,
+    ) -> None:
+        for list_path, item_name, is_add in mutations:
+            bound_list = resolve_bound_path(list_path, npc_id)
+            if item_name == LOOT_ALL_ITEMS:
+                try:
+                    loot_items = w.get_state(bound_list)
+                except (KeyError, IndexError, TypeError):
+                    loot_items = []
+                if isinstance(loot_items, list):
+                    for loot_item in loot_items:
+                        if not isinstance(loot_item, str):
+                            continue
+                        source_key = (bound_list, loot_item)
+                        player_key = (player_inv_path, loot_item)
+                        if source_key in has_fluents_true:
+                            action.add_effect(has_fluents_true[source_key], False)
+                            action.add_effect(has_fluents_false[source_key], True)
+                        if player_key in has_fluents_true:
+                            action.add_effect(has_fluents_true[player_key], True)
+                            action.add_effect(has_fluents_false[player_key], False)
+                continue
+
+            key = (bound_list, item_name)
+            if key not in has_fluents_true:
+                continue
+            if not is_add and bound_list == player_inv_path:
+                action.add_precondition(has_fluents_true[key])
+            action.add_effect(has_fluents_true[key], is_add)
+            action.add_effect(has_fluents_false[key], not is_add)
 
     # Add room objects
     room_objs: dict[str, Any] = {}
@@ -995,12 +1063,11 @@ def validate_quests(
                 talk_act, npc_set_mutations.get(npc_id, {}).get("__root__", [])
             )
             # Apply list mutations from __root__
-            for list_path, item_name, is_add in npc_list_mutations.get(npc_id, {}).get("__root__", []):
-                bound_list = resolve_bound_path(list_path, npc_id)
-                key = (bound_list, item_name)
-                if key in has_fluents_true:
-                    talk_act.add_effect(has_fluents_true[key], is_add)
-                    talk_act.add_effect(has_fluents_false[key], not is_add)
+            add_list_mutation_effects(
+                talk_act,
+                npc_list_mutations.get(npc_id, {}).get("__root__", []),
+                npc_id,
+            )
             add_move_effects(
                 talk_act, npc_move_mutations.get(npc_id, {}).get("__root__", []), npc_id
             )
@@ -1103,14 +1170,9 @@ def validate_quests(
                     # Apply list mutations from target knot.
                     # If the branch removes an item from the player inventory, we must
                     # already possess it before taking that branch.
-                    for list_path, item_name, is_add in list_muts.get(tgt_knot, []):
-                        bound_list = resolve_bound_path(list_path, npc_id)
-                        key = (bound_list, item_name)
-                        if key in has_fluents_true:
-                            if not is_add and bound_list == player_inv_path:
-                                branch_act.add_precondition(has_fluents_true[key])
-                            branch_act.add_effect(has_fluents_true[key], is_add)
-                            branch_act.add_effect(has_fluents_false[key], not is_add)
+                    add_list_mutation_effects(
+                        branch_act, list_muts.get(tgt_knot, []), npc_id
+                    )
 
                     problem.add_action(branch_act)
 
@@ -1155,14 +1217,11 @@ def validate_quests(
         add_completion_effects(
             intercept_act, npc_set_mutations.get(npc_id, {}).get("__root__", [])
         )
-        for list_path, item_name, is_add in npc_list_mutations.get(npc_id, {}).get(
-            "__root__", []
-        ):
-            bound_list = resolve_bound_path(list_path, npc_id)
-            key = (bound_list, item_name)
-            if key in has_fluents_true:
-                intercept_act.add_effect(has_fluents_true[key], is_add)
-                intercept_act.add_effect(has_fluents_false[key], not is_add)
+        add_list_mutation_effects(
+            intercept_act,
+            npc_list_mutations.get(npc_id, {}).get("__root__", []),
+            npc_id,
+        )
         add_move_effects(
             intercept_act, npc_move_mutations.get(npc_id, {}).get("__root__", []), npc_id
         )

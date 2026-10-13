@@ -17,7 +17,7 @@ Play the Pokeflute?
 
 == win
 ~ remove("$npc_room.objects", "$self")
-~ move("$player", "rooms.$current_room", "rooms.$npc_room")
+~ move("$player", "$current_room", "$npc_room")
 -> END
 
 == lose
@@ -33,5 +33,5 @@ You run away. Snorlax goes back to sleep.
 You catch Snorlax!
 ~ set("$self.accosts", 0)
 ~ set("$self.visible", 0)
-~ move("$player", "rooms.$current_room", "rooms.$npc_room")
+~ move("$player", "$current_room", "$npc_room")
 -> END

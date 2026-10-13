@@ -6,5 +6,5 @@ It's a tree blocking your path.
 
 == cut
 You cut it down.
-~ move("$player", "rooms.$current_room", "rooms.$npc_room")
+~ move("$player", "$current_room", "$npc_room")
 -> END

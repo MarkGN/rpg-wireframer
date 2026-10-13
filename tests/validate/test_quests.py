@@ -748,7 +748,7 @@ class TestRoomReachabilityValidator:
         )
         (dialogue_dir / "doorman.ink").write_text(
             '-> root\n=== root ===\n'
-            '~ move("$player", "rooms.$current_room", "rooms.$npc_room")\n'
+            '~ move("$player", "$current_room", "$npc_room")\n'
             "-> END\n",
             encoding="utf-8",
         )
@@ -1151,6 +1151,100 @@ class TestRoomReachabilityValidator:
         assert unreachable == []
         captured = capsys.readouterr()
         assert "Warning: unreachable dialogue knots" not in captured.out
+
+    def test_chest_requires_key_and_loot_transfers_contents(
+        self, tmp_path: Path
+    ) -> None:
+        """A keyed chest should yield its contents only after acquiring the key."""
+        game_dir = create_test_game(
+            tmp_path,
+            {"start": {"objects": ["hero", "chest", "alice"]}},
+            quests_config={"find_necklace": {"name": "Find Necklace"}},
+        )
+        (game_dir / "world" / "rooms" / "start.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Start",
+                    "exits": {},
+                    "objects": ["hero", "chest", "alice"],
+                    "items": ["chest_key"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "hero.yaml").write_text(
+            yaml.dump({"name": "Player", "location": "start", "inventory": []}),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "chest.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "Chest",
+                    "location": "start",
+                    "ink": "chest.ink",
+                    "key": "chest_key",
+                    "inventory": ["ruby_necklace"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (game_dir / "world" / "objects" / "alice.yaml").write_text(
+            yaml.dump(
+                {"name": "Alice", "location": "start", "ink": "alice.ink"}
+            ),
+            encoding="utf-8",
+        )
+        dialogue_dir = game_dir / "dialogue"
+        dialogue_dir.mkdir(exist_ok=True)
+        (dialogue_dir / "globals.ink").write_text(
+            "EXTERNAL get(key)\n"
+            "EXTERNAL has(list, item)\n"
+            "EXTERNAL loot()\n"
+            "EXTERNAL set(key, value)\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "chest.ink").write_text(
+            '{ get("$self.key"):\n'
+            "    -> key\n"
+            "}\n"
+            '{ get("$self.open"):\n'
+            "    -> opened\n"
+            "    - else:\n"
+            "    -> opening\n"
+            "}\n"
+            "== opening\n"
+            '~ set("$self.open", true)\n'
+            "~ loot()\n"
+            "-> END\n"
+            "== key\n"
+            '{ has("$player.inventory", get("$self.key")):\n'
+            "    -> opening\n"
+            "    - else:\n"
+            "    -> END\n"
+            "}\n"
+            "== opened\n-> END\n",
+            encoding="utf-8",
+        )
+        (dialogue_dir / "alice.ink").write_text(
+            "-> root\n=== root ===\n"
+            '{ has("$player.inventory", "ruby_necklace"): -> complete}\n'
+            "-> END\n"
+            "=== complete ===\n"
+            '~ set("quests.find_necklace.completed", 1)\n'
+            "-> END\n",
+            encoding="utf-8",
+        )
+
+        assert validate_quests(game_dir) == []
+        plan = (game_dir / "artefacts" / "find_necklace.txt").read_text(
+            encoding="utf-8"
+        )
+        assert plan.index("take_start_chest_key") < plan.index(
+            "branch_chest_key_to_opening"
+        )
+        assert plan.index("branch_chest_key_to_opening") < plan.index(
+            "talk_alice"
+        )
 
     def test_has_remove_same_dialogue(self, tmp_path: Path, capsys) -> None:
         """Test that remove() removes an item from inventory and satisfies a not has() guard."""

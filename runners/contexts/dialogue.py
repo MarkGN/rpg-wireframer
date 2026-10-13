@@ -63,8 +63,7 @@ class Dialogue(Context):
         dialogue_dir = Path(world.game_path) / "dialogue"
         json_path = ink_json_path(meta.get("ink", f"{self.npc}") + ".ink", dialogue_dir)
         if json_path is None:
-            print(f"(No dialogue available for {meta.get('name', self.npc)}.)\n")
-            return
+            raise FileExistsError(f"(No dialogue available for {meta.get('name', self.npc)} at {meta.get('ink', self.npc) + '.ink', dialogue_dir}.)\n")
 
         # --- load compiled story ---
         with open(json_path) as f:
@@ -139,7 +138,7 @@ class Dialogue(Context):
             return npc in world.npcs_in_room()
 
         def ext_move_npc(object: str, source_room: str, destination_room: str):
-            world.move_object(binder(object).split(".",1)[1], binder(source_room).split(".",1)[1], binder(destination_room).split(".",1)[1])
+            world.move_object(binder(object).split(".",1)[1], binder("rooms."+source_room).split(".",1)[1], binder("rooms."+destination_room).split(".",1)[1])
 
         def ext_pass() -> None:
             """Move the player into the room that was blocked when this dialogue began."""

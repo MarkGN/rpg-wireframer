@@ -15,6 +15,7 @@ SCENARIO_FUNCTION = "scenario"
 INTERNAL_DIVERT_PREFIX = "."
 INTERNAL_TARGETS = {"done"}
 PASS_MOVE_DESTINATION = "__pass_target_room__"
+LOOT_ALL_ITEMS = "__loot_all_items__"
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -869,7 +870,9 @@ def _find_list_mutations(
     results: list[tuple[str, str, bool]] = []
     if isinstance(node, list):
         for i, element in enumerate(node):
-            if isinstance(element, dict) and element.get("x()") in ("add", "remove"):
+            if isinstance(element, dict) and element.get("x()") == "loot":
+                results.append(("$self.inventory", LOOT_ALL_ITEMS, True))
+            elif isinstance(element, dict) and element.get("x()") in ("add", "remove"):
                 is_add = element.get("x()") == "add"
                 parsed_args = _parse_ink_arguments_before(node, i, 2)
                 if parsed_args is not None:
