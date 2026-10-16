@@ -524,7 +524,33 @@ def _find_dialogue_conditions(
     current_switch_subj = switch_subject
 
     if isinstance(node, list):
+        pending_fallthrough: list[Any] = []
+        skipped_branch_positions: set[int] = set()
         for i, element in enumerate(node):
+            if i not in skipped_branch_positions and pending_fallthrough:
+                if isinstance(element, dict) and "->" in element:
+                    target = element["->"]
+                    if (
+                        isinstance(target, str)
+                        and not _is_internal_target(target, {origin})
+                        and target not in INTERNAL_TARGETS
+                        and not target.startswith("__content__")
+                    ):
+                        expression_results.extend(
+                            (target, expr) for expr in pending_fallthrough
+                        )
+                elif isinstance(element, list):
+                    fallthrough_targets, _ = _find_divert_targets(
+                        element, origin
+                    )
+                    expression_results.extend(
+                        (target, expr)
+                        for target in fallthrough_targets
+                        if not _is_internal_target(target, {origin})
+                        and target not in INTERNAL_TARGETS
+                        and not target.startswith("__content__")
+                        for expr in pending_fallthrough
+                    )
             if element == "ev":
                 ev_idx = None
                 for k in range(i + 1, len(node)):
@@ -633,6 +659,10 @@ def _find_dialogue_conditions(
                                 if is_conditional:
                                     if block_expression is not None:
                                         expression_results.append((target_knot, block_expression))
+                                        expression_results.extend(
+                                            (target_knot, expr)
+                                            for expr in pending_fallthrough
+                                        )
                                     for var_path, neg in block_gets:
                                         get_results.append((target_knot, var_path, neg))
                                     for list_path, item_name, neg in block_hass:
@@ -640,6 +670,10 @@ def _find_dialogue_conditions(
                                 elif total_conds == 1:
                                     if block_expression is not None:
                                         expression_results.append((target_knot, ("not", block_expression)))
+                                        expression_results.extend(
+                                            (target_knot, expr)
+                                            for expr in pending_fallthrough
+                                        )
                                     for var_path, neg in block_gets:
                                         get_results.append((target_knot, var_path, not neg))
                                     for list_path, item_name, neg in block_hass:
@@ -708,6 +742,18 @@ def _find_dialogue_conditions(
                                                     not neg,
                                                 )
                                             )
+                            if is_conditional:
+                                if branch_pos is not None:
+                                    skipped_branch_positions.add(branch_pos)
+                                    if (
+                                        isinstance(node[branch_pos], dict)
+                                        and node[branch_pos].get("->") == ".^.b"
+                                    ):
+                                        skipped_branch_positions.add(branch_pos - 1)
+                                if block_expression is not None:
+                                    pending_fallthrough.append(
+                                        ("not", block_expression)
+                                    )
             elif (
                 isinstance(element, list)
                 and element
