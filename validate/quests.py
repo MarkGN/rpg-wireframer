@@ -1502,8 +1502,15 @@ def validate_quests(game_path: Path | str, *, profile: bool = False, verbose: bo
                     if target_expressions and all(
                         expression is not None for expression in planning_expressions
                     ):
-                        for expression in planning_expressions:
-                            branch_act.add_precondition(expression)
+                        # Multiple guards can divert to the same knot through
+                        # separate paths. Each expression describes one path;
+                        # requiring all of them would make alternatives
+                        # conjunctive and can produce contradictory guards.
+                        branch_act.add_precondition(
+                            planning_expressions[0]
+                            if len(planning_expressions) == 1
+                            else up.Or(*planning_expressions)
+                        )
                     else:
                         for cond in cond_matches:
                             _, var_path, negated = cond

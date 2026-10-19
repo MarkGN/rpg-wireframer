@@ -563,12 +563,15 @@ def _find_dialogue_conditions(
                             for target_knot in target_knots:
                                 if is_conditional:
                                     if block_expression is not None:
+                                        path_expression = block_expression
+                                        for fallthrough in pending_fallthrough:
+                                            path_expression = (
+                                                "and",
+                                                fallthrough,
+                                                path_expression,
+                                            )
                                         expression_results.append(
-                                            (target_knot, block_expression)
-                                        )
-                                        expression_results.extend(
-                                            (target_knot, expr)
-                                            for expr in pending_fallthrough
+                                            (target_knot, path_expression)
                                         )
                                     for var_path, neg in block_gets:
                                         get_results.append((target_knot, var_path, neg))
