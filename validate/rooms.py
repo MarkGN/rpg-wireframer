@@ -2,16 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from sys import argv
-from typing import Any
-
-import yaml
 
 from runners import world
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    with open(path) as f:
-        return yaml.safe_load(f) or {}
 
 
 def validate_world(game_path: Path | str) -> None:

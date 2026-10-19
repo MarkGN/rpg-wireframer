@@ -1,16 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
-
-import yaml
 
 from runners import world
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    with open(path) as f:
-        return yaml.safe_load(f) or {}
 
 
 def find_ink_path(ink_filename: str, dialogue_dir: Path) -> Path | None:

@@ -4,12 +4,7 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    with open(path) as f:
-        return yaml.safe_load(f) or {}
+from yaml_utils import load_yaml
 
 
 def parse_exits(exits: Any) -> list[str]:

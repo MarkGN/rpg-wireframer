@@ -1,21 +1,28 @@
 from __future__ import annotations
 
+import os
+import re
 import signal
-from contextlib import contextmanager
+import subprocess
+import tempfile
 from pathlib import Path
 from sys import argv
 from time import monotonic
 from typing import Any
 
 import unified_planning.shortcuts as up
+from unified_planning.engines.results import (
+    LogLevel,
+    LogMessage,
+    PlanGenerationResult,
+)
+from unified_planning.io import PDDLWriter
 
 up.get_environment().credits_stream = None
 try:
     import up_fast_downward
 except ImportError:
     up_fast_downward = None
-import yaml
-
 from runners import world
 from runners.binder import Binder
 from validate.ink_analyser import (
@@ -25,16 +32,345 @@ from validate.ink_analyser import (
     analyze_ink_file,
     find_ink_path,
 )
+from yaml_utils import load_yaml
+
+_EXPANDED_NODE_PATTERN = re.compile(
+    r"\bExpanded\s+([\d,]+)\s+(?:states?|state\(s\))(?=\W|$)", re.IGNORECASE
+)
+_FD_PHASE_TIME_PATTERN = re.compile(
+    r"^\s*(translator|preprocessor|search)\s+(?:time|runtime)\s*:\s*"
+    r"([\d.]+)\s*(?:s|sec(?:onds?)?)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+_FD_DIAGNOSTIC_LINE_PATTERN = re.compile(
+    r"\b(?:translator|preprocessor|search)\s+(?:time|runtime)\s*:"
+    r"|\bRunning\s+(?:translator|preprocessor|search)\b"
+    r"|\b(?:expanded|generated|evaluated|peak memory|plan length)\b",
+    re.IGNORECASE,
+)
+
+
+class _FastDownwardTimeout(TimeoutError):
+    def __init__(self, output: str, elapsed: float):
+        super().__init__(output)
+        self.output = output
+        self.elapsed = elapsed
+
+
+def _expanded_node_count(result: Any) -> int | None:
+    """Read an expanded-node count from planner metrics or captured logs."""
+    metrics = getattr(result, "metrics", None)
+    if isinstance(metrics, dict):
+        for key, value in metrics.items():
+            normalized_key = str(key).lower().replace(" ", "_").replace("-", "_")
+            if normalized_key in {"expanded_nodes", "nodes_expanded"}:
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    pass
+
+    counts: list[int] = []
+    for log in getattr(result, "log_messages", ()) or ():
+        message = getattr(log, "message", log)
+        for match in _EXPANDED_NODE_PATTERN.finditer(str(message)):
+            counts.append(int(match.group(1).replace(",", "")))
+    return sum(counts) if counts else None
+
+
+def _planner_output(result: Any | None, captured_output: str = "") -> str:
+    """Combine captured planner output with Unified Planning's logger output."""
+    messages = [captured_output.strip()] if captured_output.strip() else []
+    if result is not None:
+        for log in getattr(result, "log_messages", ()) or ():
+            message = getattr(log, "message", log)
+            if message and str(message).strip():
+                messages.append(str(message).strip())
+
+    # The output stream and UP log messages can contain overlapping lines. Keep
+    # their original order while avoiding duplicate diagnostics in the report.
+    lines: list[str] = []
+    seen: set[str] = set()
+    for message in messages:
+        for line in message.splitlines():
+            normalized = line.strip()
+            if normalized and normalized not in seen:
+                lines.append(line)
+                seen.add(normalized)
+    return "\n".join(lines)
+
+
+def _fast_downward_phase_times(
+    output: str,
+) -> dict[str, float]:
+    """Extract phase times that Fast Downward reports in its own output."""
+    phase_times: dict[str, float] = {}
+    for phase, seconds in _FD_PHASE_TIME_PATTERN.findall(output):
+        try:
+            phase_times[phase.lower()] = float(seconds)
+        except ValueError:
+            continue
+    return phase_times
+
+
+def _fast_downward_diagnostic_lines(output: str) -> list[str]:
+    return [
+        line.strip()
+        for line in output.splitlines()
+        if line.strip() and _FD_DIAGNOSTIC_LINE_PATTERN.search(line)
+    ]
+
+
+def _sas_quest_goal_values(
+    sas_task: str, quest_fluent_names: dict[str, str]
+) -> dict[str, tuple[int, int]]:
+    """Find each quest's positive SAS variable/value in the translated task."""
+    lines = sas_task.splitlines()
+    fluent_to_quest = {
+        re.sub(r"[^a-z0-9]", "", pddl_name.lower()): quest_id
+        for quest_id, pddl_name in quest_fluent_names.items()
+    }
+    assignments: dict[str, tuple[int, int]] = {}
+    variable_blocks = [
+        index for index, line in enumerate(lines) if line == "begin_variable"
+    ]
+    if not variable_blocks:
+        raise ValueError("Fast Downward output has no SAS variable section")
+
+    for start in variable_blocks:
+        if start + 3 >= len(lines):
+            continue
+        variable_match = re.fullmatch(r"var(\d+)", lines[start + 1])
+        try:
+            value_count = int(lines[start + 3])
+        except ValueError:
+            continue
+        if variable_match is None:
+            continue
+        variable = int(variable_match.group(1))
+        for value, line in enumerate(lines[start + 4 : start + 4 + value_count]):
+            if not line.startswith("Atom "):
+                continue
+            normalized_line = re.sub(r"[^a-z0-9]", "", line.lower())
+            for fluent, quest_id in fluent_to_quest.items():
+                if fluent and fluent in normalized_line:
+                    assignments[quest_id] = (variable, value)
+                    break
+
+    return assignments
+
+
+def _sas_task_with_goal(
+    sas_task: str, assignment: tuple[int, int]
+) -> str:
+    """Return a SAS task copy whose goal is one positive quest fluent."""
+    lines = sas_task.splitlines()
+    try:
+        start = lines.index("begin_goal")
+        end = lines.index("end_goal", start)
+    except ValueError as error:
+        raise ValueError("Fast Downward output has no SAS goal section") from error
+    variable, value = assignment
+    lines[start : end + 1] = ["begin_goal", "1", f"{variable} {value}", "end_goal"]
+    return "\n".join(lines) + "\n"
+
+
+def _run_fast_downward_command(
+    command: list[str], cwd: Path, timeout: float | None
+) -> tuple[str, int, float]:
+    """Run a Fast Downward driver command and return its output, code, and time."""
+    started = monotonic()
+    process_options = (
+        {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+        if os.name == "nt"
+        else {"start_new_session": True}
+    )
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        **process_options,
+    )
+    try:
+        output, _ = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        try:
+            if os.name == "nt":
+                process.kill()
+            else:
+                os.killpg(process.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            process.kill()
+        output, _ = process.communicate()
+        if not output and error.output:
+            output = (
+                error.output.decode(errors="replace")
+                if isinstance(error.output, bytes)
+                else error.output
+            )
+        raise _FastDownwardTimeout(output, monotonic() - started) from error
+    return output, process.returncode, monotonic() - started
+
+
+def _solve_fast_downward_quests(
+    problem: Any,
+    quest_completed: dict[str, Any],
+    quest_ids: list[str],
+    planner: Any,
+    timeout_seconds: float | None = None,
+) -> tuple[dict[str, dict[str, Any]], float, str | None]:
+    """Translate quest goals once, then run searches with individual SAS goals."""
+    if not quest_ids:
+        return {}, 0.0, None
+
+    problem.clear_goals()
+    goals = [quest_completed[quest_id] for quest_id in quest_ids]
+    # Keep every quest fluent relevant to translation without requiring all
+    # quests to be jointly achievable. A conjunctive all-quests goal can be
+    # proven unsolvable by the translator, which then emits only a dummy SAS
+    # task and discards the individual quest variables we need for reuse.
+    problem.add_goal(goals[0] if len(goals) == 1 else up.Or(*goals))
+    writer = PDDLWriter(problem)
+    records: dict[str, dict[str, Any]] = {}
+    deadline = (
+        monotonic() + timeout_seconds if timeout_seconds is not None else None
+    )
+
+    def run_command(command: list[str], working_dir: Path) -> tuple[str, int, float]:
+        remaining = None if deadline is None else max(0.0, deadline - monotonic())
+        if remaining is not None and remaining <= 0:
+            raise _FastDownwardTimeout("Quest validation deadline reached", 0.0)
+        return _run_fast_downward_command(command, working_dir, remaining)
+
+    with tempfile.TemporaryDirectory(prefix="quest-fast-downward-") as temp_name:
+        temp_dir = Path(temp_name)
+        domain_path = temp_dir / "domain.pddl"
+        problem_path = temp_dir / "problem.pddl"
+        sas_path = temp_dir / "output.sas"
+        writer.write_domain(str(domain_path))
+        writer.write_problem(str(problem_path))
+
+        base_command = planner._base_cmd(str(temp_dir / "plan.txt"))
+        translate_command = base_command + [
+            "--translate",
+            str(domain_path),
+            str(problem_path),
+        ]
+        try:
+            translation_output, return_code, translation_seconds = (
+                run_command(translate_command, temp_dir)
+            )
+        except _FastDownwardTimeout as error:
+            first_quest = quest_ids[0]
+            records[first_quest] = {
+                "result": None,
+                "output": error.output,
+                "translation_seconds": error.elapsed,
+                "search_seconds": 0.0,
+                "timeout": True,
+            }
+            return records, 0.0, first_quest
+
+        if return_code != 0 or not sas_path.exists():
+            raise RuntimeError(
+                "Fast Downward translation failed:\n" + translation_output
+            )
+        sas_task = sas_path.read_text(encoding="utf-8")
+        goal_values = _sas_quest_goal_values(
+            sas_task,
+            {
+                quest_id: writer.get_pddl_name(quest_completed[quest_id])
+                for quest_id in quest_ids
+            },
+        )
+        search_config = (
+            [planner._fd_search_config]
+            if planner._fd_search_config
+            else ["eager_greedy([ff()])"]
+        )
+
+        for index, quest_id in enumerate(quest_ids):
+            if quest_id not in goal_values:
+                # Fast Downward removes a goal fluent when its value is
+                # unreachable in the grounded task. It cannot be searched in
+                # SAS, and is already known to be unsolvable from this state.
+                records[quest_id] = {
+                    "result": None,
+                    "output": "Fast Downward proved quest goal unreachable during translation.",
+                    "translation_seconds": translation_seconds if index == 0 else 0.0,
+                    "search_seconds": 0.0,
+                    "timeout": False,
+                    "goal_pruned": True,
+                }
+                continue
+            plan_path = temp_dir / f"plan-{index}.txt"
+            quest_sas_path = temp_dir / f"task-{index}.sas"
+            quest_sas_path.write_text(
+                _sas_task_with_goal(sas_task, goal_values[quest_id]),
+                encoding="utf-8",
+            )
+            command = planner._base_cmd(str(plan_path)) + [
+                str(quest_sas_path),
+                "--search-options",
+                "--search",
+                *search_config,
+            ]
+            try:
+                search_output, return_code, search_seconds = run_command(
+                    command, temp_dir
+                )
+            except _FastDownwardTimeout as error:
+                records[quest_id] = {
+                    "result": None,
+                    "output": error.output,
+                    "translation_seconds": translation_seconds if index == 0 else 0.0,
+                    "search_seconds": error.elapsed,
+                    "timeout": True,
+                }
+                return records, translation_seconds, quest_id
+
+            plan = None
+            if plan_path.exists():
+                plan = planner._plan_from_file(
+                    problem, str(plan_path), writer.get_item_named
+                )
+            log_messages = [LogMessage(LogLevel.INFO, search_output)]
+            status = planner._result_status(
+                problem, plan, return_code, log_messages
+            )
+            result = PlanGenerationResult(
+                status,
+                plan=plan,
+                engine_name=planner.name,
+                log_messages=log_messages,
+                metrics={"engine_internal_time": str(search_seconds)},
+            )
+            records[quest_id] = {
+                "result": result,
+                "output": (
+                    translation_output + "\n" + search_output
+                    if index == 0
+                    else search_output
+                ),
+                "translation_seconds": translation_seconds if index == 0 else 0.0,
+                "search_seconds": search_seconds,
+                "timeout": False,
+            }
+    return records, translation_seconds, None
 
 
 class _Profile:
-    def __init__(self, limit_seconds: float = 60.0):
+    def __init__(self, limit_seconds: float = 120.0):
         self.started = monotonic()
         self.deadline = self.started + limit_seconds
         self.limit_seconds = limit_seconds
-        self.action_seconds = {"Explore Context": 0.0, "Dialogue": 0.0}
+        self.phase_seconds: dict[str, float] = {}
         self.solver_calls = 0
         self.solver_seconds = 0.0
+        self.expanded_nodes = 0
+        self.expanded_node_results = 0
+        self.expanded_node_unavailable = 0
         self.stopped = False
         self.stop_reason = ""
         self.planner_name = ""
@@ -43,32 +379,46 @@ class _Profile:
     def expired(self) -> bool:
         if monotonic() >= self.deadline:
             self.stopped = True
-            self.stop_reason = "five-minute profiling limit reached"
+            self.stop_reason = "two-minute profiling limit reached"
             return True
         return False
 
     def remaining(self) -> float:
         return max(0.0, self.deadline - monotonic())
 
-    @contextmanager
-    def time_actions(self, context: str):
-        started = monotonic()
-        try:
-            yield
-        finally:
-            self.action_seconds[context] += monotonic() - started
+    def add_time(self, phase: str, seconds: float) -> None:
+        self.phase_seconds[phase] = self.phase_seconds.get(phase, 0.0) + seconds
 
-    def report(self, problem: Any | None = None, state_example: list[str] | None = None):
+    def report(
+        self, problem: Any | None = None, state_example: list[str] | None = None, verbose: bool = False
+    ):
         elapsed = monotonic() - self.started
-        total_action_seconds = sum(self.action_seconds.values())
+        measured = sum(self.phase_seconds.values())
+        self.phase_seconds["Other"] = max(0.0, elapsed - measured)
         print("\nQuest validator profile")
         print(f"Elapsed: {elapsed:.2f}s")
         if self.stopped:
             print(f"Stopped: {self.stop_reason}")
         print(f"Solver calls: {self.solver_calls}")
+        if self.expanded_node_results:
+            print(
+                f"Expanded nodes: {self.expanded_nodes:,} across "
+                f"{self.expanded_node_results} solver results"
+            )
+        else:
+            print("Expanded nodes: unavailable")
+        if self.expanded_node_unavailable:
+            print(
+                "Expanded-node count unavailable for "
+                f"{self.expanded_node_unavailable} solver call(s)"
+            )
         if self.planner_name:
             print(f"Planner: {self.planner_name}")
-        print(f"Solver time: {self.solver_seconds:.2f}s")
+        print(f"Planner solve time (within search): {self.solver_seconds:.2f}s")
+        print("Time by phase:")
+        for phase, seconds in self.phase_seconds.items():
+            fraction = seconds / elapsed if elapsed else 0.0
+            print(f"  {phase}: {seconds:.2f}s ({fraction:.1%})")
         slow_records = [
             record for record in self.solver_records if record["seconds"] >= 10.0
         ]
@@ -80,6 +430,11 @@ class _Profile:
                 print(
                     f"  {record['goal']}: {record['seconds']:.2f}s "
                     f"({record['status']})"
+                    + (
+                        f", {record['expanded_nodes']:,} expanded"
+                        if record.get("expanded_nodes") is not None
+                        else ""
+                    )
                 )
         if self.solver_records:
             print("Slowest solver calls:")
@@ -91,10 +446,39 @@ class _Profile:
                 print(
                     f"  {record['goal']}: {record['seconds']:.2f}s "
                     f"({record['status']})"
+                    + (
+                        f", {record['expanded_nodes']:,} expanded"
+                        if record.get("expanded_nodes") is not None
+                        else ""
+                    )
                 )
-        for context, seconds in self.action_seconds.items():
-            fraction = seconds / total_action_seconds if total_action_seconds else 0.0
-            print(f"{context} action expansion: {seconds:.4f}s ({fraction:.1%})")
+        fd_records = [
+            record for record in self.solver_records if record.get("fd_output")
+        ]
+        if fd_records:
+            print("Fast Downward output by solver call:")
+            for record in fd_records:
+                phase_times = record.get("fd_phase_times", {})
+                reported_times = _fast_downward_phase_times(record["fd_output"])
+                phase_labels = []
+                for phase in ("translator", "preprocessor", "search"):
+                    if phase == "translator" and record.get("fd_translation_reused"):
+                        phase_labels.append("translator: reused")
+                    elif phase in phase_times:
+                        if phase in reported_times:
+                            phase_labels.append(f"{phase}: {phase_times[phase]:.2f}s")
+                        else:
+                            phase_labels.append(
+                                f"{phase}: ~{phase_times[phase]:.2f}s (measured)"
+                            )
+                    elif phase == "preprocessor":
+                        phase_labels.append("preprocessor: not run")
+                    else:
+                        phase_labels.append(f"{phase}: not reported")
+                phase_summary = ", ".join(phase_labels)
+                print(f"  {record['goal']}: {phase_summary}")
+                for line in _fast_downward_diagnostic_lines(record["fd_output"]):
+                    print(f"    {line}")
         if problem is not None:
             fluents = list(problem.fluents)
             actions = list(problem.actions)
@@ -103,9 +487,7 @@ class _Profile:
                 "State/model size: "
                 f"{len(fluents)} fluents, {len(actions)} actions, {len(objects)} objects"
             )
-            boolean_fluents = [
-                fluent for fluent in fluents if not fluent.signature
-            ]
+            boolean_fluents = [fluent for fluent in fluents if not fluent.signature]
             state_count = (
                 f"{2 ** len(boolean_fluents):,}"
                 if len(boolean_fluents) < 1000
@@ -115,43 +497,20 @@ class _Profile:
                 "Estimated boolean state space: "
                 f"2^{len(boolean_fluents)} ({state_count} states)"
             )
-            print("Example actions:")
-            for action in actions[:10]:
-                print(f"  {action.name}")
-        if state_example:
+            if verbose:
+                print("Example actions:")
+                for action in actions[:10]:
+                    print(f"  {action.name}")
+        if state_example and verbose:
             print("Example initial state:")
             for fact in state_example[:30]:
                 print(f"  {fact}")
-
-
-@contextmanager
-def _hard_timeout(seconds: float):
-    """Interrupt a profiled in-process planner on Unix when it exceeds its budget."""
-    if seconds <= 0:
-        raise TimeoutError
-
-    def interrupt(_signum: int, _frame: Any) -> None:
-        raise TimeoutError("planner solve timed out")
-
-    previous_handler = signal.getsignal(signal.SIGALRM)
-    signal.signal(signal.SIGALRM, interrupt)
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_handler)
 
 
 def _planner_names() -> list[str] | None:
     if up_fast_downward is not None:
         return ["fast-downward"]
     return None
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
 
 
 def _load_craft_recipes(game_path: Path) -> list[dict[str, Any]]:
@@ -189,7 +548,9 @@ def _load_craft_recipes(game_path: Path) -> list[dict[str, Any]]:
         if isinstance(raw, dict):
             raw_recipes = raw.get("recipes", [])
             if isinstance(raw_recipes, list):
-                recipes.extend(recipe for recipe in raw_recipes if isinstance(recipe, dict))
+                recipes.extend(
+                    recipe for recipe in raw_recipes if isinstance(recipe, dict)
+                )
 
     return recipes
 
@@ -231,7 +592,9 @@ def _load_craft_scenarios(game_path: Path) -> dict[str, list[dict[str, Any]]]:
     return scenarios
 
 
-def _craft_rooms_for_game(objects: dict[str, Any], rooms: dict[str, Any], game_path: Path) -> set[str]:
+def _craft_rooms_for_game(
+    objects: dict[str, Any], rooms: dict[str, Any], game_path: Path
+) -> set[str]:
     """Only allow crafting in rooms whose object is wired to a craft scenario."""
     scenario_dir = game_path / "world" / "scenarios"
     if not scenario_dir.exists():
@@ -243,7 +606,9 @@ def _craft_rooms_for_game(objects: dict[str, Any], rooms: dict[str, Any], game_p
     for room_id, room_data in rooms.items():
         for object_id in room_data.get("objects", []):
             object_data = objects.get(object_id, {})
-            ink_ref = object_data.get("ink", object_data.get("dialogue", f"{object_id}.ink"))
+            ink_ref = object_data.get(
+                "ink", object_data.get("dialogue", f"{object_id}.ink")
+            )
             if not isinstance(ink_ref, str):
                 continue
             scenario_name = Path(ink_ref).stem
@@ -303,11 +668,11 @@ def _discrete_value_key(value: Any) -> tuple[str, Any] | None:
     return None
 
 
-def validate_quests(
-    game_path: Path | str, *, profile: bool = False
-) -> list[str]:
+def validate_quests(game_path: Path | str, *, profile: bool = False, verbose: bool = False) -> list[str]:
     """Validate that every declared quest can reach a truthy completion mutation."""
     game_path = Path(game_path)
+    profiler = _Profile() if profile else None
+    world_load_started = monotonic()
     w = world.World(game_path)
     rooms = w.world_state["rooms"]
     objects = w.world_state["objects"]
@@ -315,10 +680,9 @@ def validate_quests(
     start_room = w.current_room
     dialogue_dir = game_path / "dialogue"
     quest_ids = sorted(w.world_state.get("quests", {}))
-    quest_targets = {
-        quest_id: f"quests.{quest_id}.completed" for quest_id in quest_ids
-    }
-    profiler = _Profile() if profile else None
+    quest_targets = {quest_id: f"quests.{quest_id}.completed" for quest_id in quest_ids}
+    if profiler:
+        profiler.add_time("World loading (YAML)", monotonic() - world_load_started)
 
     def resolve_bound_path(var_path: str, npc_id: str) -> str:
         key = (var_path, npc_id)
@@ -339,6 +703,7 @@ def validate_quests(
         return item if isinstance(item, str) else None
 
     # Map NPC dialogues
+    dialogue_started = monotonic()
     npc_dialogue_graphs: dict[str, dict[str, set[str]]] = {}
     npc_get_conditions: dict[str, dict[str, list[tuple[str, str, bool]]]] = {}
     npc_set_mutations: dict[str, dict[str, list[tuple[str, Any]]]] = {}
@@ -357,6 +722,7 @@ def validate_quests(
             ink_file = find_ink_path(f"{ink_ref}.ink", dialogue_dir)
             if ink_file and ink_file.exists():
                 try:
+
                     def resolve_external_argument(
                         function_name: str, args: list[Any], _origin: str, id=obj_id
                     ) -> Any:
@@ -365,9 +731,7 @@ def validate_quests(
                             and len(args) == 1
                             and isinstance(args[0], str)
                         ):
-                            return w.get_state(
-                                resolve_bound_path(args[0], id)
-                            )
+                            return w.get_state(resolve_bound_path(args[0], id))
                         return None
 
                     (
@@ -384,6 +748,7 @@ def validate_quests(
                         dialogue_dir,
                         game_path,
                         resolve_external_argument,
+                        profiler.phase_seconds if profiler else None,
                     )
                     npc_dialogue_graphs[obj_id] = graph
                     npc_get_conditions[obj_id] = get_conds
@@ -411,18 +776,37 @@ def validate_quests(
         has_map = npc_has_conditions.get(npc_id, {})
         list_map = npc_list_mutations.get(npc_id, {})
         move_map = npc_move_mutations.get(npc_id, {})
-        dyn = any(
-            bool(cond_list) for knot_name, cond_list in cond_map.items() if knot_name in reachable_knots
-        ) or any(
-            bool(mut_list) for knot_name, mut_list in mut_map.items() if knot_name in reachable_knots
-        ) or any(
-            bool(has_list) for knot_name, has_list in has_map.items() if knot_name in reachable_knots
-        ) or any(
-            bool(list_list) for knot_name, list_list in list_map.items() if knot_name in reachable_knots
-        ) or any(
-            bool(move_list) for knot_name, move_list in move_map.items() if knot_name in reachable_knots
-        ) or any(
-            bool(scripts) for knot_name, scripts in npc_scenario_calls.get(npc_id, {}).items() if knot_name in reachable_knots
+        dyn = (
+            any(
+                bool(cond_list)
+                for knot_name, cond_list in cond_map.items()
+                if knot_name in reachable_knots
+            )
+            or any(
+                bool(mut_list)
+                for knot_name, mut_list in mut_map.items()
+                if knot_name in reachable_knots
+            )
+            or any(
+                bool(has_list)
+                for knot_name, has_list in has_map.items()
+                if knot_name in reachable_knots
+            )
+            or any(
+                bool(list_list)
+                for knot_name, list_list in list_map.items()
+                if knot_name in reachable_knots
+            )
+            or any(
+                bool(move_list)
+                for knot_name, move_list in move_map.items()
+                if knot_name in reachable_knots
+            )
+            or any(
+                bool(scripts)
+                for knot_name, scripts in npc_scenario_calls.get(npc_id, {}).items()
+                if knot_name in reachable_knots
+            )
         )
         if not dyn:
             unreachable = sorted(set(graph) - reachable_knots)
@@ -440,9 +824,7 @@ def validate_quests(
             return exit_data
         return target if target in rooms else None
 
-    def guard_matches(
-        guard: str, target: str, destination: str | None
-    ) -> bool:
+    def guard_matches(guard: str, target: str, destination: str | None) -> bool:
         if guard == target or guard == destination:
             return True
         if destination in rooms:
@@ -454,6 +836,10 @@ def validate_quests(
         if bound_destination.startswith("rooms."):
             room_id = bound_destination.removeprefix("rooms.")
             return room_id if room_id in rooms else None
+        if bound_destination.startswith("objects."):
+            room_id = bound_destination.removeprefix("objects.")
+            if room_id in rooms:
+                return room_id
         if bound_destination in rooms:
             return bound_destination
         if destination in rooms:
@@ -479,9 +865,7 @@ def validate_quests(
             if destination not in rooms:
                 continue
             interceptor = (
-                exit_data.get("blocker")
-                if isinstance(exit_data, dict)
-                else None
+                exit_data.get("blocker") if isinstance(exit_data, dict) else None
             )
             if interceptor is None:
                 for object_id in source_objects:
@@ -517,9 +901,17 @@ def validate_quests(
                 npc_dialogue_graphs[npc_id]
             )
 
+    if profiler:
+        dialogue_elapsed = monotonic() - dialogue_started
+        measured_ink = profiler.phase_seconds.get(
+            "Ink compilation", 0.0
+        ) + profiler.phase_seconds.get("Dialogue analysis", 0.0)
+        profiler.add_time("Dialogue setup", max(0.0, dialogue_elapsed - measured_ink))
+
     # Construct STRIPS Planning Problem using unified-planning.
     # We now prune to only state variables that can actually affect reachability
     # in the reachable dialogue subgraph, so the planner sees only relevant state.
+    model_preparation_started = monotonic()
     relevant_var_paths: set[str] = set()
     relevant_list_paths: set[tuple[str, str]] = set()
     finite_guard_paths: set[str] = set()
@@ -537,18 +929,14 @@ def validate_quests(
                 relevant_var_paths.add(bound_path)
                 finite_guard_paths.add(bound_path)
                 if value_key is not None:
-                    discrete_values_by_path.setdefault(bound_path, set()).add(
-                        value_key
-                    )
+                    discrete_values_by_path.setdefault(bound_path, set()).add(value_key)
             if isinstance(right, tuple) and len(right) == 2 and right[0] == "get":
                 value_key = _discrete_value_key(left)
                 bound_path = resolve_bound_path(right[1], npc_id)
                 relevant_var_paths.add(bound_path)
                 finite_guard_paths.add(bound_path)
                 if value_key is not None:
-                    discrete_values_by_path.setdefault(bound_path, set()).add(
-                        value_key
-                    )
+                    discrete_values_by_path.setdefault(bound_path, set()).add(value_key)
         for child in expression[1:]:
             collect_expression_values(child, npc_id)
 
@@ -589,9 +977,7 @@ def validate_quests(
                         for loot_item in loot_items:
                             if isinstance(loot_item, str):
                                 relevant_list_paths.add((bound_list, loot_item))
-                                relevant_list_paths.add(
-                                    (player_inv_path, loot_item)
-                                )
+                                relevant_list_paths.add((player_inv_path, loot_item))
                 else:
                     relevant_list_paths.add(
                         (resolve_bound_path(list_path, npc_id), item_name)
@@ -610,13 +996,13 @@ def validate_quests(
                 bound_path = resolve_bound_path(var_path, npc_id)
                 value_key = _discrete_value_key(value)
                 if value_key is not None and bound_path in finite_guard_paths:
-                    discrete_values_by_path.setdefault(bound_path, set()).add(
-                        value_key
-                    )
+                    discrete_values_by_path.setdefault(bound_path, set()).add(value_key)
     relevant_var_paths.update(movement_accost_paths)
 
     craft_scenarios = _load_craft_scenarios(game_path)
-    craft_recipes = [recipe for recipes in craft_scenarios.values() for recipe in recipes]
+    craft_recipes = [
+        recipe for recipes in craft_scenarios.values() for recipe in recipes
+    ]
     relevant_inventory_items = {
         item_name
         for bound_path, item_name in relevant_list_paths
@@ -627,7 +1013,8 @@ def validate_quests(
         for recipe in craft_recipes:
             recipe_items = [
                 str(item)
-                for item in list(recipe.get("input", [])) + list(recipe.get("output", []))
+                for item in list(recipe.get("input", []))
+                + list(recipe.get("output", []))
             ]
             if any(item in relevant_inventory_items for item in recipe_items):
                 relevant_recipe_items.update(recipe_items)
@@ -648,6 +1035,11 @@ def validate_quests(
                     if path == target_path and bool(value):
                         quest_set_candidates[quest_id].append((npc_id, knot_name))
 
+    if profiler:
+        profiler.add_time(
+            "Planning model preparation", monotonic() - model_preparation_started
+        )
+    state_construction_started = monotonic()
     problem = up.Problem("quest_reachability")
 
     Location = up.UserType("Location")
@@ -698,10 +1090,10 @@ def validate_quests(
                 continue
             condition = pending_move(room_objs[destination])
             for room in room_objs.values():
-                action.add_effect(
-                    at_room(room), False, condition=condition
-                )
-            action.add_effect(at_room(room_objs[destination]), True, condition=condition)
+                action.add_effect(at_room(room), False, condition=condition)
+            action.add_effect(
+                at_room(room_objs[destination]), True, condition=condition
+            )
             action.add_effect(pending_move(room_objs[destination]), False)
 
     # Collect all bound variables for reachable get & set actions only.
@@ -729,9 +1121,7 @@ def validate_quests(
             initial_value_key = None
         if initial_value_key is not None:
             value_keys.add(initial_value_key)
-        if value_keys.issubset(
-            {("number", 0), ("number", 1)}
-        ):
+        if value_keys.issubset({("number", 0), ("number", 1)}):
             binary_numeric_value_paths.add(bound_path)
             continue
         for value_key in sorted(value_keys, key=repr):
@@ -774,9 +1164,7 @@ def validate_quests(
         if operator == "get" and len(expression) == 2:
             bound_var = resolve_bound_path(expression[1], npc_id)
             return (
-                var_fluents_true[bound_var]()
-                if bound_var in var_fluents_true
-                else None
+                var_fluents_true[bound_var]() if bound_var in var_fluents_true else None
             )
         if operator == "has" and len(expression) == 3:
             bound_list = resolve_bound_path(expression[1], npc_id)
@@ -784,11 +1172,7 @@ def validate_quests(
             if item_name is None:
                 return None
             key = (bound_list, item_name)
-            return (
-                has_fluents_true[key]()
-                if key in has_fluents_true
-                else None
-            )
+            return has_fluents_true[key]() if key in has_fluents_true else None
         if operator in ("==", "!=") and len(expression) == 3:
             left, right = expression[1], expression[2]
             get_operand = None
@@ -847,9 +1231,10 @@ def validate_quests(
             value_key = _discrete_value_key(value)
             if value_key is None:
                 continue
-            for (candidate_path, candidate_key), fluent in (
-                discrete_value_fluents.items()
-            ):
+            for (
+                candidate_path,
+                candidate_key,
+            ), fluent in discrete_value_fluents.items():
                 if candidate_path == bound_var:
                     action.add_effect(fluent, candidate_key == value_key)
 
@@ -898,10 +1283,12 @@ def validate_quests(
     if start_room in room_objs:
         problem.set_initial_value(at_room(room_objs[start_room]), True)
 
-    # Add room item pickups (take actions)
     if profiler:
-        action_timer = profiler.time_actions("Explore Context")
-        action_timer.__enter__()
+        profiler.add_time(
+            "Planning state construction", monotonic() - state_construction_started
+        )
+    action_generation_started = monotonic()
+    # Add room item pickups (take actions)
     for r_name, r_data in rooms.items():
         if r_name not in room_objs:
             continue
@@ -918,9 +1305,6 @@ def validate_quests(
                 take_act.add_effect(has_fluents_true[player_inv_key], True)
                 take_act.add_effect(has_fluents_false[player_inv_key], False)
             problem.add_action(take_act)
-    if profiler:
-        action_timer.__exit__(None, None, None)
-
     # Crafting is only available after a dialogue triggers a craft scenario, and the
     # scenario must be reachable in the room's object dialogue stack. This mirrors
     # runtime behavior: a lab only becomes a crafting bench if the dialogue actually
@@ -936,7 +1320,9 @@ def validate_quests(
         problem.add_fluent(fl, default_initial_value=False)
         scenario_fluents[scenario_name] = fl
 
-    craft_rooms_by_scenario: dict[str, set[str]] = {script: set() for script in craft_scenarios}
+    craft_rooms_by_scenario: dict[str, set[str]] = {
+        script: set() for script in craft_scenarios
+    }
     for room_name, room_data in rooms.items():
         for object_id in room_data.get("objects", []):
             scenario_scripts = set()
@@ -948,7 +1334,9 @@ def validate_quests(
     for script_name, recipes in craft_scenarios.items():
         for index, recipe in enumerate(recipes):
             recipe_items = [
-                str(item) for item in list(recipe.get("input", [])) + list(recipe.get("output", []))
+                str(item)
+                for item in list(recipe.get("input", []))
+                + list(recipe.get("output", []))
             ]
             if not recipe_items:
                 continue
@@ -957,9 +1345,7 @@ def validate_quests(
             inputs = [str(item) for item in recipe.get("input", [])]
             outputs = [str(item) for item in recipe.get("output", [])]
             for room_name in sorted(craft_rooms_by_scenario.get(script_name, set())):
-                action_name = (
-                    f"craft_{script_name}_{index}_{room_name}_{'_'.join(sorted(set(inputs + outputs)))}"
-                )
+                action_name = f"craft_{script_name}_{index}_{room_name}_{'_'.join(sorted(set(inputs + outputs)))}"
                 craft_act = up.InstantaneousAction(action_name)
                 craft_act.add_precondition(scenario_fluents[script_name])
                 craft_act.add_precondition(at_room(room_objs[room_name]))
@@ -981,9 +1367,6 @@ def validate_quests(
                 problem.add_action(craft_act)
 
     # Add room transitions (move actions)
-    if profiler:
-        action_timer = profiler.time_actions("Explore Context")
-        action_timer.__enter__()
     for r_name, r_data in rooms.items():
         if r_name not in room_objs:
             continue
@@ -1010,15 +1393,9 @@ def validate_quests(
                 move_act.add_effect(at_room(room_objs[r_name]), False)
                 move_act.add_effect(at_room(room_objs[nxt]), True)
                 problem.add_action(move_act)
-    if profiler:
-        action_timer.__exit__(None, None, None)
-
     # Add NPC and Dialogue objects & actions
     all_npc_knots: dict[str, list[str]] = {}
     knot_objects_by_npc: dict[str, dict[str, Any]] = {}
-    if profiler:
-        action_timer = profiler.time_actions("Explore Context")
-        action_timer.__enter__()
     for npc_id, graph in stateful_npc_dialogues.items():
         npc_obj = up.Object(npc_id, NPC)
         problem.add_object(npc_obj)
@@ -1073,17 +1450,10 @@ def validate_quests(
             )
             problem.add_action(talk_act)
 
-    if profiler:
-        action_timer.__exit__(None, None, None)
-
-    if profiler:
-        action_timer = profiler.time_actions("Dialogue")
-        action_timer.__enter__()
     for npc_id, graph in stateful_npc_dialogues.items():
         npc_obj = problem.object(npc_id)
         knot_objs = {
-            knot_name: problem.object(f"{npc_id}_{knot_name}")
-            for knot_name in graph
+            knot_name: problem.object(f"{npc_id}_{knot_name}") for knot_name in graph
         }
         get_conds = npc_get_conditions.get(npc_id, {})
         set_muts = npc_set_mutations.get(npc_id, {})
@@ -1098,7 +1468,9 @@ def validate_quests(
             src_hass = has_conds.get(src_knot, [])
             for tgt_knot in targets:
                 if tgt_knot in knot_objs:
-                    branch_act = up.InstantaneousAction(f"branch_{npc_id}_{src_knot}_to_{tgt_knot}")
+                    branch_act = up.InstantaneousAction(
+                        f"branch_{npc_id}_{src_knot}_to_{tgt_knot}"
+                    )
                     branch_act.add_precondition(in_dialogue(npc_obj))
                     branch_act.add_precondition(at_knot(npc_obj, knot_objs[src_knot]))
                     branch_act.add_effect(at_knot(npc_obj, knot_objs[src_knot]), False)
@@ -1107,7 +1479,9 @@ def validate_quests(
                         script_name = tgt_knot.removeprefix("__scenario__")
                         if script_name in scenario_fluents:
                             branch_act.add_effect(scenario_fluents[script_name], True)
-                    for script_name in npc_scenario_calls.get(npc_id, {}).get(src_knot, set()):
+                    for script_name in npc_scenario_calls.get(npc_id, {}).get(
+                        src_knot, set()
+                    ):
                         if script_name in scenario_fluents:
                             branch_act.add_effect(scenario_fluents[script_name], True)
 
@@ -1149,13 +1523,9 @@ def validate_quests(
                             key = (bound_list, item_name)
                             if key in has_fluents_true:
                                 if negated:
-                                    branch_act.add_precondition(
-                                        has_fluents_false[key]
-                                    )
+                                    branch_act.add_precondition(has_fluents_false[key])
                                 else:
-                                    branch_act.add_precondition(
-                                        has_fluents_true[key]
-                                    )
+                                    branch_act.add_precondition(has_fluents_true[key])
 
                     # Apply set() mutations from target knot
                     add_set_effects(branch_act, set_muts.get(tgt_knot, []), npc_id)
@@ -1186,9 +1556,6 @@ def validate_quests(
             for room in room_objs.values():
                 end_act.add_effect(pending_move(room), False)
             problem.add_action(end_act)
-    if profiler:
-        action_timer.__exit__(None, None, None)
-
     for (source, destination), npc_id in movement_interceptors.items():
         knot_objs = knot_objects_by_npc.get(npc_id)
         if not knot_objs or "__root__" not in knot_objs:
@@ -1223,16 +1590,20 @@ def validate_quests(
             npc_id,
         )
         add_move_effects(
-            intercept_act, npc_move_mutations.get(npc_id, {}).get("__root__", []), npc_id
+            intercept_act,
+            npc_move_mutations.get(npc_id, {}).get("__root__", []),
+            npc_id,
         )
         problem.add_action(intercept_act)
 
-    # Test only the completion goals declared by quest definitions. This avoids
-    # restarting the planner for every dialogue knot.
+    if profiler:
+        profiler.add_time("Action generation", monotonic() - action_generation_started)
+
+    # Test completion goals independently from the original game state. Fast
+    # Downward translates their disjunction once, then each search targets one
+    # quest flag.
     incomplete_quests = [
-        quest_id
-        for quest_id in quest_ids
-        if not quest_set_candidates.get(quest_id)
+        quest_id for quest_id in quest_ids if not quest_set_candidates.get(quest_id)
     ]
     state_example = []
     if profiler:
@@ -1241,11 +1612,10 @@ def validate_quests(
                 state_example.append(str(fluent))
         state_example.append(f"at_room({start_room})")
 
-    def save_satisficing_plan(
-        quest_id: str, result: Any, planner_name: str
-    ) -> None:
+    def save_satisficing_plan(quest_id: str, result: Any, planner_name: str) -> None:
         if result.status.name != "SOLVED_SATISFICING" or result.plan is None:
             return
+        output_started = monotonic() if profiler else None
         artefacts_dir = game_path / "artefacts"
         artefacts_dir.mkdir(parents=True, exist_ok=True)
         plan_path = artefacts_dir / f"{quest_id}.txt"
@@ -1256,114 +1626,179 @@ def validate_quests(
             f"{result.plan}\n",
             encoding="utf-8",
         )
+        if profiler and output_started is not None:
+            profiler.add_time("Plan artifact output", monotonic() - output_started)
 
+    search_started = monotonic() if profiler else None
     if profiler:
-        checked_quests: set[str] = set()
+        planner_initialization_started = monotonic()
         with up.OneshotPlanner(
-            names=_planner_names(), problem_kind=problem.kind
+            name="fast-downward",
+            problem_kind=problem.kind,
+            params={
+                "fast_downward_search_config": "eager_greedy([ff()])",
+            },
         ) as planner:
+            profiler.add_time(
+                "Planner initialization", monotonic() - planner_initialization_started
+            )
             profiler.planner_name = planner.name
-            remaining_quests = [quest_id for quest_id in quest_ids if quest_set_candidates.get(quest_id)]
-            while remaining_quests:
-                progress_made = False
-                for quest_id in list(remaining_quests):
-                    if not quest_set_candidates.get(quest_id):
-                        continue
-                    checked_quests.add(quest_id)
-                    problem.clear_goals()
-                    problem.add_goal(quest_completed[quest_id])
-                    if profiler.expired():
-                        break
-                    profiler.solver_calls += 1
-                    solve_started = monotonic()
-                    try:
-                        with _hard_timeout(profiler.remaining()):
-                            res = planner.solve(problem)
-                    except TimeoutError:
-                        profiler.stopped = True
-                        profiler.stop_reason = "planner solve timed out"
-                        solve_seconds = monotonic() - solve_started
-                        profiler.solver_seconds += solve_seconds
-                        profiler.solver_records.append(
-                            {
-                                "goal": f"quest:{quest_id}",
-                                "seconds": solve_seconds,
-                                "status": "TIMEOUT",
-                            }
+            active_quests = [
+                quest_id for quest_id in quest_ids if quest_set_candidates.get(quest_id)
+            ]
+            if active_quests:
+                try:
+                    records, translation_seconds, timed_out_quest = (
+                        _solve_fast_downward_quests(
+                            problem,
+                            quest_completed,
+                            active_quests,
+                            planner,
+                            profiler.remaining(),
                         )
-                        break
-                    solve_seconds = monotonic() - solve_started
-                    profiler.solver_seconds += solve_seconds
+                    )
+                except (OSError, RuntimeError, ValueError) as error:
+                    raise RuntimeError(
+                        "Could not reuse Fast Downward's translated quest task"
+                    ) from error
+                profiler.solver_calls += len(records)
+                profiler.solver_seconds += translation_seconds + sum(
+                    record["search_seconds"] for record in records.values()
+                )
+                profiler.add_time("Shared Fast Downward translation", translation_seconds)
+                profiler.add_time(
+                    "Fast Downward search",
+                    sum(record["search_seconds"] for record in records.values()),
+                )
+                for index, quest_id in enumerate(active_quests):
+                    record = records.get(quest_id)
+                    if record is None:
+                        incomplete_quests.append(quest_id)
+                        continue
+                    res = record["result"]
+                    output = record["output"]
+                    is_timeout = record["timeout"]
+                    seconds = record["translation_seconds"] + record["search_seconds"]
+                    if record.get("goal_pruned"):
+                        status = "UNSOLVABLE_PROVEN"
+                        expanded_nodes = None
+                        profiler.expanded_node_unavailable += 1
+                        incomplete_quests.append(quest_id)
+                    elif is_timeout:
+                        profiler.stopped = True
+                        profiler.stop_reason = (
+                            "Fast Downward translation or search timed out"
+                        )
+                        profiler.expanded_node_unavailable += 1
+                        status = "TIMEOUT"
+                        expanded_nodes = None
+                        incomplete_quests.extend(active_quests[index:])
+                    else:
+                        status = res.status.name
+                        expanded_nodes = _expanded_node_count(res)
+                        if expanded_nodes is None:
+                            profiler.expanded_node_unavailable += 1
+                        else:
+                            profiler.expanded_nodes += expanded_nodes
+                            profiler.expanded_node_results += 1
+                        save_satisficing_plan(quest_id, res, planner.name)
+                        if status not in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
+                            incomplete_quests.append(quest_id)
                     profiler.solver_records.append(
                         {
                             "goal": f"quest:{quest_id}",
-                            "seconds": solve_seconds,
-                            "status": res.status.name,
+                            "seconds": seconds,
+                            "status": status,
+                            "expanded_nodes": expanded_nodes,
+                            "fd_output": output,
+                            "fd_phase_times": {
+                                **(
+                                    {"translator": translation_seconds}
+                                    if index == 0
+                                    else {}
+                                ),
+                                **(
+                                    {"search": record["search_seconds"]}
+                                    if record["search_seconds"]
+                                    else {}
+                                ),
+                            },
+                            "fd_translation_reused": index > 0,
                         }
                     )
-                    save_satisficing_plan(quest_id, res, planner.name)
-                    if res.status.name in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
-                        progress_made = True
-                        remaining_quests.remove(quest_id)
-                        completion_var = quest_targets[quest_id]
-                        if completion_var in var_fluents_true:
-                            problem.set_initial_value(
-                                var_fluents_true[completion_var], True
-                            )
-                            problem.set_initial_value(
-                                var_fluents_false[completion_var], False
-                            )
-                    if profiler.expired():
+                    if is_timeout:
                         break
-                if not progress_made or profiler.expired():
-                    break
-            incomplete_quests.extend(
-                quest_id for quest_id in remaining_quests if quest_set_candidates.get(quest_id)
-            )
-            if profiler.stopped:
-                incomplete_quests.extend(
-                    quest_id
-                    for quest_id in quest_ids
-                    if quest_id not in checked_quests
-                    and quest_set_candidates.get(quest_id)
-                )
-        # The timeout path above intentionally stops checking later quests.
     else:
-        remaining_quests = [quest_id for quest_id in quest_ids if quest_set_candidates.get(quest_id)]
-        with up.OneshotPlanner(
-            names=_planner_names(), problem_kind=problem.kind
-        ) as planner:
-            while remaining_quests:
-                progress_made = False
-                for quest_id in list(remaining_quests):
-                    if not quest_set_candidates.get(quest_id):
-                        continue
+        active_quests = [
+            quest_id for quest_id in quest_ids if quest_set_candidates.get(quest_id)
+        ]
+        if up_fast_downward is not None:
+            with up.OneshotPlanner(
+                name="fast-downward",
+                problem_kind=problem.kind,
+                params={"fast_downward_search_config": "eager_greedy([ff()])"},
+            ) as planner:
+                records, _, timed_out_quest = _solve_fast_downward_quests(
+                    problem, quest_completed, active_quests, planner
+                )
+                for quest_id in active_quests:
+                    record = records.get(quest_id)
+                    res = record["result"] if record else None
+                    if (
+                        res is not None
+                        and res.status.name
+                        in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY")
+                    ):
+                        save_satisficing_plan(quest_id, res, planner.name)
+                    else:
+                        incomplete_quests.append(quest_id)
+                    if quest_id == timed_out_quest:
+                        break
+                if timed_out_quest:
+                    incomplete_quests.extend(
+                        quest_id
+                        for quest_id in active_quests
+                        if quest_id not in records
+                    )
+        else:
+            with up.OneshotPlanner(
+                names=_planner_names(), problem_kind=problem.kind
+            ) as planner:
+                for quest_id in active_quests:
                     problem.clear_goals()
                     problem.add_goal(quest_completed[quest_id])
                     res = planner.solve(problem)
                     save_satisficing_plan(quest_id, res, planner.name)
-                    if res.status.name in ("SOLVED_SATISFICING", "SOLVED_OPTIMALLY"):
-                        progress_made = True
-                        remaining_quests.remove(quest_id)
-                        completion_var = quest_targets[quest_id]
-                        if completion_var in var_fluents_true:
-                            problem.set_initial_value(
-                                var_fluents_true[completion_var], True
-                            )
-                            problem.set_initial_value(
-                                var_fluents_false[completion_var], False
-                            )
-                    
-                if not progress_made:
-                    break
-        incomplete_quests.extend(
-            quest_id for quest_id in remaining_quests if quest_set_candidates.get(quest_id)
+                    if res.status.name not in (
+                        "SOLVED_SATISFICING",
+                        "SOLVED_OPTIMALLY",
+                    ):
+                        incomplete_quests.append(quest_id)
+
+    if profiler and search_started is not None:
+        # Planner context entry, the shared translation, per-quest searches,
+        # and plan output account for the profiled search interval. Keep any
+        # small remainder visible rather than folding it into a measured phase.
+        search_elapsed = monotonic() - search_started
+        measured_search = sum(
+            profiler.phase_seconds.get(phase, 0.0)
+            for phase in (
+                "Planner initialization",
+                "Shared Fast Downward translation",
+                "Fast Downward search",
+                "Plan artifact output",
+            )
+        )
+        profiler.add_time(
+            "Planner overhead", max(0.0, search_elapsed - measured_search)
         )
 
     if incomplete_quests:
-        print(f"Warning: quests not completable: {', '.join(sorted(set(incomplete_quests)))}")
+        print(
+            f"Warning: quests not completable: {', '.join(sorted(set(incomplete_quests)))}"
+        )
     if profiler:
-        profiler.report(problem, state_example)
+        profiler.report(problem, state_example, verbose)
 
     return sorted(set(incomplete_quests))
 
@@ -1388,4 +1823,4 @@ class QuestValidator:
 
 if __name__ == "__main__":
     game_dir = argv[1]
-    validate_quests(Path(f"{game_dir}"), profile="--profile" in argv[2:])
+    validate_quests(Path(f"{game_dir}"), profile="--profile" in argv[2:], verbose="--verbose" in argv[2:])

@@ -5,7 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import yaml
+from yaml_utils import load_yaml
 
 if TYPE_CHECKING:
     from .action import Action
@@ -15,11 +15,6 @@ from .factory import ContextFactory
 # ---------------------------------------------------------------------------
 # Loader
 # ---------------------------------------------------------------------------
-
-
-def load_yaml(path: Path) -> dict:
-    with open(path) as f:
-        return yaml.safe_load(f) or {}
 
 
 # ---------------------------------------------------------------------------
@@ -244,9 +239,7 @@ class World:
                                     placed_objects.add(blocker_handle)
 
         for obj_handle in sorted(placed_objects):
-            self.world_state["objects"][obj_handle] = resolved_objects[
-                obj_handle
-            ]
+            self.world_state["objects"][obj_handle] = resolved_objects[obj_handle]
 
         # Quests
         for path in sorted(self.quests_dir.rglob("*.yaml")):
@@ -287,9 +280,7 @@ class World:
             )
 
         self.current_room = player_rooms[0]
-        self.world_state["player"] = self.world_state["objects"][
-            self.player_handle
-        ]
+        self.world_state["player"] = self.world_state["objects"][self.player_handle]
 
         self.push_context(context="explore")
 
@@ -342,7 +333,7 @@ class World:
             to_objects.append(npc_id)
         if npc_id == self.player_handle:
             self.current_room = to_room
-        
+
     def npcs_in_room(self) -> list[str]:
         """Return npc_ids currently present in the active room."""
         present = []
@@ -356,7 +347,11 @@ class World:
 
     # TODO start with current location, then fan out by exits: that's usually faster
     def find_npc(self, npc) -> str:
-        candidate_rooms = [key for (key, val) in self.world_state["rooms"].items() if npc in val.get("objects", [])]
+        candidate_rooms = [
+            key
+            for (key, val) in self.world_state["rooms"].items()
+            if npc in val.get("objects", [])
+        ]
         if candidate_rooms:
             return candidate_rooms[0]
         for room_handle, room_data in self.world_state["rooms"].items():
@@ -369,11 +364,12 @@ class World:
                 for exit_item in exits:
                     if isinstance(exit_item, dict):
                         for exit_spec in exit_item.values():
-                            if isinstance(exit_spec, dict) and exit_spec.get("blocker") == npc:
+                            if (
+                                isinstance(exit_spec, dict)
+                                and exit_spec.get("blocker") == npc
+                            ):
                                 return room_handle
-        sys.exit(
-            f"Error: object {npc} not found"
-        )
+        sys.exit(f"Error: object {npc} not found")
 
     def display_room(self) -> dict[str, Any]:
         output: dict[str, Any] = {}
