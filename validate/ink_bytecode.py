@@ -64,14 +64,11 @@ def _find_divert_targets(
     scenario_calls: list[tuple[str, str]] = []
 
     if isinstance(node, dict):
-        if "->" in node:
-            target = node["->"]
-            if (
-                isinstance(target, str)
-                and not target.startswith(INTERNAL_DIVERT_PREFIX)
-                and target not in INTERNAL_TARGETS
-            ):
-                targets.add(target)
+        # Ink encodes a tunnel call as ``->t->``. It transfers control like a
+        # divert, but its caller resumes when the tunnel returns.
+        target = node.get("->t->", node.get("->"))
+        if target is not None and isinstance(target, str) and not target.startswith(INTERNAL_DIVERT_PREFIX) and target not in INTERNAL_TARGETS:
+            targets.add(target)
         for value in node.values():
             child_targets, child_scenarios = _find_divert_targets(value, origin)
             targets.update(child_targets)
@@ -219,15 +216,14 @@ def _evaluate_ink_argument(
 def _extract_targets_from_branch(node: Any) -> set[str]:
     targets: set[str] = set()
     if isinstance(node, dict):
-        if "->" in node:
-            tgt = node["->"]
-            if (
-                isinstance(tgt, str)
-                and not _is_internal_target(tgt, set())
-                and tgt not in INTERNAL_TARGETS
-                and tgt not in ("end", "done")
-            ):
-                targets.add(tgt)
+        tgt = node.get("->t->", node.get("->"))
+        if (tgt is not None
+            and isinstance(tgt, str)
+            and not _is_internal_target(tgt, set())
+            and tgt not in INTERNAL_TARGETS
+            and tgt not in ("end", "done")
+        ):
+            targets.add(tgt)
         for val in node.values():
             targets.update(_extract_targets_from_branch(val))
     elif isinstance(node, list):

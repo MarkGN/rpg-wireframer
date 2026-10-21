@@ -334,6 +334,37 @@ def _build_graph_from_story(
             move_mutations[stitch_name].extend(move_mutations.get(knot_name, []))
             guard_expressions[stitch_name].extend(guard_expressions.get(knot_name, []))
 
+    # Tunnel calls transfer control to another flow and tunnel returns resume
+    # the caller. Add the call and return edges to the same graph used by
+    # dialogue reachability and quest planning.
+    tunnel_calls: list[tuple[str, str]] = []
+    tunnel_return_nodes: dict[str, set[str]] = {}
+    for flow_name, body in {"__root__": root[0], **knots_container}.items():
+        choice_bodies = _collect_choice_bodies(body)
+        choice_keys = set(choice_bodies)
+        tunnel_calls.extend(
+            (flow_name, target)
+            for target in _collect_tunnel_calls(body, choice_keys)
+        )
+
+        for choice_key, choice_body in choice_bodies.items():
+            choice_target = f"__choice__{flow_name}__{choice_key}"
+            if choice_target not in graph:
+                continue
+            tunnel_calls.extend(
+                (choice_target, target)
+                for target in _collect_tunnel_calls(choice_body, set())
+            )
+            if _count_tunnel_returns(choice_body):
+                tunnel_return_nodes.setdefault(flow_name, set()).add(choice_target)
+
+        if _count_tunnel_returns(body, choice_keys):
+            tunnel_return_nodes.setdefault(flow_name, set()).add(flow_name)
+
+    for caller, tunnel in tunnel_calls:
+        for return_node in tunnel_return_nodes.get(tunnel, set()):
+            graph.setdefault(return_node, set()).add(caller)
+
     return (
         graph,
         root_scenarios,
@@ -400,3 +431,34 @@ def _collect_stitch_names(node: Any, prefix: str = "") -> set[str]:
         for item in node:
             names.update(_collect_stitch_names(item, prefix))
     return names
+
+
+def _count_tunnel_returns(node: Any, excluded_keys: set[str] | None = None) -> int:
+    if excluded_keys is None:
+        excluded_keys = set()
+    if node == "->->":
+        return 1
+    if isinstance(node, dict):
+        return sum(
+            _count_tunnel_returns(value, excluded_keys)
+            for key, value in node.items()
+            if key not in excluded_keys
+        )
+    if isinstance(node, list):
+        return sum(_count_tunnel_returns(value, excluded_keys) for value in node)
+    return 0
+
+
+def _collect_tunnel_calls(node: Any, excluded_keys: set[str]) -> set[str]:
+    calls: set[str] = set()
+    if isinstance(node, dict):
+        target = node.get("->t->")
+        if isinstance(target, str) and not target.startswith("."):
+            calls.add(target)
+        for key, value in node.items():
+            if key not in excluded_keys:
+                calls.update(_collect_tunnel_calls(value, excluded_keys))
+    elif isinstance(node, list):
+        for value in node:
+            calls.update(_collect_tunnel_calls(value, excluded_keys))
+    return calls

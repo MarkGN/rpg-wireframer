@@ -246,7 +246,10 @@ class VisualRunner:
     def draw_asset(self, path: Path, rect: pygame.Rect) -> pygame.Surface | None:
         try:
             image = pygame.image.load(path).convert_alpha()
-            image = pygame.transform.smoothscale(image, rect.size)
+            w, h = image.get_size()
+            scale = min(rect.width / w, rect.height / h)
+            size = (round(w * scale), round(h * scale))
+            image = pygame.transform.smoothscale(image, size)
             self.screen.blit(image, rect)
             return image
         except (FileNotFoundError, pygame.error):
