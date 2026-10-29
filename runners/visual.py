@@ -24,7 +24,7 @@ from .world import World
 WIDTH = 800
 HEIGHT = 600
 IMAGE_HEIGHT = 390
-ACTION_HEIGHT = 35
+ACTION_HEIGHT = 30
 VISIBLE_ACTIONS = 6
 BACKGROUND = (24, 27, 32)
 PANEL = (38, 42, 50)
@@ -32,6 +32,8 @@ TEXT = (238, 240, 244)
 MUTED = (173, 180, 192)
 ACCENT = (76, 137, 214)
 WARNING = (220, 150, 72)
+PREVIOUS_BUTTON = pygame.Rect(12, HEIGHT - 26, 180, 24)
+NEXT_BUTTON = pygame.Rect(WIDTH - 192, HEIGHT - 26, 180, 24)
 
 
 class VisualRunner:
@@ -77,7 +79,7 @@ class VisualRunner:
                 self.click(event.pos)
 
     def click(self, position: tuple[int, int]) -> None:
-        x, y = position
+        _, y = position
         if y < IMAGE_HEIGHT:
             return
 
@@ -87,11 +89,11 @@ class VisualRunner:
             ("independent", action) for action in independent
         ] + [("context", action) for action in context_actions]
         max_offset = max(0, len(all_actions) - VISIBLE_ACTIONS)
-        if max_offset and y >= HEIGHT - 40:
-            if x >= WIDTH // 2 and self.action_offset < max_offset:
-                self.action_offset += 1
-            elif x < WIDTH // 2 and self.action_offset > 0:
+        if max_offset and y >= HEIGHT - ACTION_HEIGHT:
+            if PREVIOUS_BUTTON.collidepoint(position) and self.action_offset > 0:
                 self.action_offset -= 1
+            elif NEXT_BUTTON.collidepoint(position) and self.action_offset < max_offset:
+                self.action_offset += 1
             return
         page_start = self.action_offset
         page = all_actions[page_start : page_start + VISIBLE_ACTIONS]
@@ -147,7 +149,7 @@ class VisualRunner:
                 x = 20 + (index % 6) * 125
                 y = 30 + (index // 6) * 145
                 self.draw_asset(
-                    self.game_dir / "assets" / "sprites" / f"{object_id}.png",
+                    self.game_dir / "assets" / "sprites" / f"{self.world.get_state('objects.'+object_id).get('portrait',0) or object_id}.png",
                     pygame.Rect(x, y, 96, 96),
                 )
 
@@ -224,15 +226,27 @@ class VisualRunner:
         page = labels[self.action_offset : self.action_offset + VISIBLE_ACTIONS]
         for index, label in enumerate(page):
             rect = pygame.Rect(
-                12, IMAGE_HEIGHT + index * ACTION_HEIGHT + 2, WIDTH - 24, 30
+                12, IMAGE_HEIGHT + index * ACTION_HEIGHT + 2, WIDTH - 24, 26
             )
             pygame.draw.rect(self.screen, PANEL, rect)
             self.draw_text(f"{index + 1}. {label}", (25, rect.y + 5), self.small_font)
         if max_offset:
             if self.action_offset > 0:
-                self.draw_text("< previous actions", (WIDTH - 190, HEIGHT - 30), self.small_font)
+                pygame.draw.rect(self.screen, PANEL, PREVIOUS_BUTTON)
+                pygame.draw.rect(self.screen, ACCENT, PREVIOUS_BUTTON, 1)
+                self.draw_text(
+                    "< previous actions",
+                    (PREVIOUS_BUTTON.x + 8, PREVIOUS_BUTTON.y + 3),
+                    self.small_font,
+                )
             if self.action_offset < max_offset:
-                self.draw_text("next actions >", (WIDTH - 150, HEIGHT - 30), self.small_font)
+                pygame.draw.rect(self.screen, PANEL, NEXT_BUTTON)
+                pygame.draw.rect(self.screen, ACCENT, NEXT_BUTTON, 1)
+                self.draw_text(
+                    "next actions >",
+                    (NEXT_BUTTON.x + 8, NEXT_BUTTON.y + 3),
+                    self.small_font,
+                )
 
     def draw_overlay(self, kind: str) -> None:
         self.screen.fill(PANEL)
